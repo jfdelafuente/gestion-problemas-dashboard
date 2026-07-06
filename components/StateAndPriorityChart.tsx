@@ -1,7 +1,3 @@
-'use client';
-
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell } from 'recharts';
-
 interface StateAndPriorityChartProps {
   byState: Record<string, number>;
   byPriority: Record<string, number>;
@@ -24,47 +20,51 @@ const priorityColors: Record<string, string> = {
   'Lowest': '#06b6d4',
 };
 
-export default function StateAndPriorityChart({ byState, byPriority }: StateAndPriorityChartProps) {
-  const stateData = Object.entries(byState).map(([name, value]) => ({ name, value }));
-  const priorityData = Object.entries(byPriority).map(([name, value]) => ({ name, value }));
+function KpiGroup({
+  title,
+  data,
+  colors,
+}: {
+  title: string;
+  data: Record<string, number>;
+  colors: Record<string, string>;
+}) {
+  const entries = Object.entries(data).sort(([, a], [, b]) => b - a);
+  const total = entries.reduce((sum, [, value]) => sum + value, 0);
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
-      {/* By State */}
-      <div className="bg-white rounded-lg shadow-md p-6">
-        <h3 className="text-lg font-semibold text-gray-800 mb-4">Distribución por Estado</h3>
-        <ResponsiveContainer width="100%" height={300}>
-          <BarChart data={stateData}>
-            <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="name" angle={-45} textAnchor="end" height={80} />
-            <YAxis />
-            <Tooltip />
-            <Bar dataKey="value" radius={[8, 8, 0, 0]}>
-              {stateData.map((entry, index) => (
-                <Cell key={`state-${index}`} fill={stateColors[entry.name] || '#6b7280'} />
-              ))}
-            </Bar>
-          </BarChart>
-        </ResponsiveContainer>
+    <div className="bg-white rounded-lg shadow-md p-6">
+      <h3 className="text-lg font-semibold text-gray-800 mb-4">{title}</h3>
+      <div className="flex flex-wrap gap-3">
+        {entries.map(([name, value]) => {
+          const pct = total > 0 ? (value / total) * 100 : 0;
+          return (
+            <div key={name} className="flex-1 min-w-[110px] border border-gray-100 rounded-md p-3">
+              <div className="flex items-center gap-2 mb-1">
+                <span
+                  className="w-2.5 h-2.5 rounded-full shrink-0"
+                  style={{ backgroundColor: colors[name] || '#6b7280' }}
+                />
+                <span className="text-xs text-gray-600 truncate" title={name}>
+                  {name}
+                </span>
+              </div>
+              <div className="text-2xl font-bold text-gray-900">{pct.toFixed(0)}%</div>
+              <div className="text-xs text-gray-400">{value} issues</div>
+            </div>
+          );
+        })}
+        {entries.length === 0 && <div className="text-sm text-gray-500">Sin datos</div>}
       </div>
+    </div>
+  );
+}
 
-      {/* By Priority */}
-      <div className="bg-white rounded-lg shadow-md p-6">
-        <h3 className="text-lg font-semibold text-gray-800 mb-4">Distribución por Prioridad</h3>
-        <ResponsiveContainer width="100%" height={300}>
-          <BarChart data={priorityData}>
-            <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="name" angle={-45} textAnchor="end" height={80} />
-            <YAxis />
-            <Tooltip />
-            <Bar dataKey="value" radius={[8, 8, 0, 0]}>
-              {priorityData.map((entry, index) => (
-                <Cell key={`priority-${index}`} fill={priorityColors[entry.name] || '#6b7280'} />
-              ))}
-            </Bar>
-          </BarChart>
-        </ResponsiveContainer>
-      </div>
+export default function StateAndPriorityChart({ byState, byPriority }: StateAndPriorityChartProps) {
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
+      <KpiGroup title="Distribución por Estado" data={byState} colors={stateColors} />
+      <KpiGroup title="Distribución por Prioridad" data={byPriority} colors={priorityColors} />
     </div>
   );
 }

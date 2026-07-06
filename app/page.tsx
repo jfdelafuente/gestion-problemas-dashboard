@@ -82,6 +82,37 @@ function buildStatsFromIssues(issues: DashboardIssueRow[]) {
   };
 }
 
+function buildTimelineWithBacklog(items: Array<{ created?: string; resolutiondate?: string }>, days: number) {
+  const dayMap = new Map<string, { created: number; resolved: number }>();
+
+  items.forEach((item) => {
+    if (!item.created) return;
+
+    const createdKey = new Date(item.created).toISOString().split('T')[0];
+    const createdEntry = dayMap.get(createdKey) || { created: 0, resolved: 0 };
+    createdEntry.created++;
+    dayMap.set(createdKey, createdEntry);
+
+    if (item.resolutiondate) {
+      const resolvedKey = new Date(item.resolutiondate).toISOString().split('T')[0];
+      const resolvedEntry = dayMap.get(resolvedKey) || { created: 0, resolved: 0 };
+      resolvedEntry.resolved++;
+      dayMap.set(resolvedKey, resolvedEntry);
+    }
+  });
+
+  let runningBacklog = 0;
+  const rows = Array.from(dayMap.entries())
+    .sort(([dateA], [dateB]) => dateA.localeCompare(dateB))
+    .map(([date, { created, resolved }]) => {
+      runningBacklog += created - resolved;
+      return { date, created, closed: resolved, backlog: runningBacklog };
+    });
+
+  const pastDate = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+  return rows.filter((row) => new Date(row.date) >= pastDate);
+}
+
 type Tab = 'general' | 'postmortem' | 'problema';
 
 export default function Home() {
@@ -132,6 +163,18 @@ export default function Home() {
     );
   }, [stats.issues, selectedDays]);
   const postmortemStats = useMemo(() => buildStatsFromIssues(postmortemIssues), [postmortemIssues]);
+  const postmortemAllIssues = useMemo(
+    () => stats.issues.filter((issue) => issue.type === 'Postmortem'),
+    [stats.issues]
+  );
+  const postmortemPmTasks = useMemo(
+    () => postmortemAllIssues.flatMap((issue) => issue.subtasks),
+    [postmortemAllIssues]
+  );
+  const postmortemTimeline = useMemo(
+    () => buildTimelineWithBacklog(postmortemPmTasks, selectedDays),
+    [postmortemPmTasks, selectedDays]
+  );
 
   const problemaIssues = useMemo(() => {
     const pastDate = new Date(Date.now() - selectedDays * 24 * 60 * 60 * 1000);
@@ -140,6 +183,18 @@ export default function Home() {
     );
   }, [stats.issues, selectedDays]);
   const problemaStats = useMemo(() => buildStatsFromIssues(problemaIssues), [problemaIssues]);
+  const problemaAllIssues = useMemo(
+    () => stats.issues.filter((issue) => issue.type === 'Problema'),
+    [stats.issues]
+  );
+  const problemaActionPoints = useMemo(
+    () => problemaAllIssues.flatMap((issue) => issue.subtasks),
+    [problemaAllIssues]
+  );
+  const problemaTimeline = useMemo(
+    () => buildTimelineWithBacklog(problemaActionPoints, selectedDays),
+    [problemaActionPoints, selectedDays]
+  );
 
   return (
     <div className="min-h-screen bg-gray-100">
@@ -258,6 +313,13 @@ export default function Home() {
               byState={postmortemStats.byState}
               byPriority={postmortemStats.byPriority}
             />
+            <TimelineChart
+              data={postmortemTimeline}
+              createdLabel="Entradas"
+              closedLabel="Solucionadas"
+              backlogLabel="Backlog"
+              showBacklog
+            />
 
             {/* Issues Table */}
             <IssuesTable
@@ -287,6 +349,13 @@ export default function Home() {
             <StateAndPriorityChart
               byState={problemaStats.byState}
               byPriority={problemaStats.byPriority}
+            />
+            <TimelineChart
+              data={problemaTimeline}
+              createdLabel="Entradas"
+              closedLabel="Solucionadas"
+              backlogLabel="Backlog"
+              showBacklog
             />
 
             {/* Issues Table */}

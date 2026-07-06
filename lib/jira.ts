@@ -48,6 +48,8 @@ export interface SubtaskRow {
   status: string;
   priority: string;
   done: boolean;
+  created?: string;
+  resolutiondate?: string;
   actionPointType?: string;
   assignedGroup?: string;
 }
@@ -94,10 +96,12 @@ const SEARCH_FIELDS = [
 export interface SubtaskExtraFields {
   actionPointType?: string;
   assignedGroup?: string;
+  created?: string;
+  resolutiondate?: string;
 }
 
 // El campo "subtasks" del /search solo devuelve summary/status/priority/issuetype,
-// así que campos como el tipo de Action Point o el Grupo Asignado hay que pedirlos aparte por clave.
+// así que campos como el tipo de Action Point, el Grupo Asignado o las fechas hay que pedirlos aparte por clave.
 async function getSubtaskExtraFields(keys: string[]): Promise<Map<string, SubtaskExtraFields>> {
   const extrasByKey = new Map<string, SubtaskExtraFields>();
   const chunkSize = 150;
@@ -109,7 +113,7 @@ async function getSubtaskExtraFields(keys: string[]): Promise<Map<string, Subtas
         params: {
           jql: `key in (${chunk.join(',')})`,
           maxResults: chunkSize,
-          fields: 'customfield_11955,customfield_10724',
+          fields: 'customfield_11955,customfield_10724,created,resolutiondate',
         },
       });
       response.data.issues.forEach(
@@ -118,11 +122,15 @@ async function getSubtaskExtraFields(keys: string[]): Promise<Map<string, Subtas
           fields?: {
             customfield_11955?: { value: string };
             customfield_10724?: { name: string };
+            created?: string;
+            resolutiondate?: string;
           };
         }) => {
           extrasByKey.set(issue.key, {
             actionPointType: issue.fields?.customfield_11955?.value,
             assignedGroup: issue.fields?.customfield_10724?.name,
+            created: issue.fields?.created,
+            resolutiondate: issue.fields?.resolutiondate,
           });
         }
       );
@@ -241,6 +249,8 @@ export async function getDashboardStats(days: number = 30): Promise<DashboardSta
         done: s.fields.status.statusCategory.key === 'done',
         actionPointType: subtaskExtras.get(s.key)?.actionPointType,
         assignedGroup: subtaskExtras.get(s.key)?.assignedGroup,
+        created: subtaskExtras.get(s.key)?.created,
+        resolutiondate: subtaskExtras.get(s.key)?.resolutiondate,
       })),
     }))
     .sort((a, b) => b.created.localeCompare(a.created));
