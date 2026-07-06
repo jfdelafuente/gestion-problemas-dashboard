@@ -3,7 +3,6 @@ import https from 'https';
 import { NextResponse } from 'next/server';
 
 const JIRA_DOMAIN = process.env.NEXT_PUBLIC_JIRA_DOMAIN;
-const JIRA_EMAIL = process.env.JIRA_EMAIL;
 const JIRA_API_TOKEN = process.env.JIRA_API_TOKEN;
 
 export async function GET() {
@@ -16,9 +15,8 @@ export async function GET() {
     const response = await axios.get(
       `https://${JIRA_DOMAIN}/rest/api/2/myself`,
       {
-        auth: {
-          username: JIRA_EMAIL || '',
-          password: JIRA_API_TOKEN || '',
+        headers: {
+          Authorization: `Bearer ${JIRA_API_TOKEN || ''}`,
         },
         httpsAgent,
       }

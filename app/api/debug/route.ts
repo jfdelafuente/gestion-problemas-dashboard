@@ -3,7 +3,6 @@ import https from 'https';
 import { NextRequest, NextResponse } from 'next/server';
 
 const JIRA_DOMAIN = process.env.NEXT_PUBLIC_JIRA_DOMAIN;
-const JIRA_EMAIL = process.env.JIRA_EMAIL;
 const JIRA_API_TOKEN = process.env.JIRA_API_TOKEN;
 const PROJECT_KEY = process.env.NEXT_PUBLIC_JIRA_PROJECT_KEY;
 
@@ -15,9 +14,8 @@ export async function GET(request: NextRequest) {
 
     const jiraClient = axios.create({
       baseURL: `https://${JIRA_DOMAIN}/rest/api/2`,
-      auth: {
-        username: JIRA_EMAIL || '',
-        password: JIRA_API_TOKEN || '',
+      headers: {
+        Authorization: `Bearer ${JIRA_API_TOKEN || ''}`,
       },
       httpsAgent,
     });
@@ -26,7 +24,6 @@ export async function GET(request: NextRequest) {
 
     console.log('Testing Jira connection...');
     console.log('Domain:', JIRA_DOMAIN);
-    console.log('Email:', JIRA_EMAIL);
     console.log('JQL:', jql);
 
     const response = await jiraClient.get('/search', {
