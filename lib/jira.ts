@@ -52,6 +52,7 @@ export interface SubtaskRow {
   resolutiondate?: string;
   actionPointType?: string;
   assignedGroup?: string;
+  involvedGroups?: string[];
 }
 
 export interface DashboardIssueRow {
@@ -96,6 +97,7 @@ const SEARCH_FIELDS = [
 export interface SubtaskExtraFields {
   actionPointType?: string;
   assignedGroup?: string;
+  involvedGroups?: string[];
   created?: string;
   resolutiondate?: string;
 }
@@ -113,7 +115,7 @@ async function getSubtaskExtraFields(keys: string[]): Promise<Map<string, Subtas
         params: {
           jql: `key in (${chunk.join(',')})`,
           maxResults: chunkSize,
-          fields: 'customfield_11955,customfield_10724,created,resolutiondate',
+          fields: 'customfield_11955,customfield_10724,customfield_14100,created,resolutiondate',
         },
       });
       response.data.issues.forEach(
@@ -122,6 +124,7 @@ async function getSubtaskExtraFields(keys: string[]): Promise<Map<string, Subtas
           fields?: {
             customfield_11955?: { value: string };
             customfield_10724?: { name: string };
+            customfield_14100?: Array<{ name: string }>;
             created?: string;
             resolutiondate?: string;
           };
@@ -129,6 +132,7 @@ async function getSubtaskExtraFields(keys: string[]): Promise<Map<string, Subtas
           extrasByKey.set(issue.key, {
             actionPointType: issue.fields?.customfield_11955?.value,
             assignedGroup: issue.fields?.customfield_10724?.name,
+            involvedGroups: issue.fields?.customfield_14100?.map((g) => g.name),
             created: issue.fields?.created,
             resolutiondate: issue.fields?.resolutiondate,
           });
@@ -249,6 +253,7 @@ export async function getDashboardStats(days: number = 30): Promise<DashboardSta
         done: s.fields.status.statusCategory.key === 'done',
         actionPointType: subtaskExtras.get(s.key)?.actionPointType,
         assignedGroup: subtaskExtras.get(s.key)?.assignedGroup,
+        involvedGroups: subtaskExtras.get(s.key)?.involvedGroups,
         created: subtaskExtras.get(s.key)?.created,
         resolutiondate: subtaskExtras.get(s.key)?.resolutiondate,
       })),
