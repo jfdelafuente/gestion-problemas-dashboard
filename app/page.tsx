@@ -178,9 +178,12 @@ function chunkByStep<T extends { date: string; backlog: number }>(
   const out: T[] = [];
   for (let i = 0; i < rows.length; i += step) {
     const chunk = rows.slice(i, i + step);
+    // Se etiqueta con el ÚLTIMO día del bucket (igual que el backlog, que ya es de fin de
+    // bucket): así la barra más reciente siempre queda fechada hoy en vez de "step-1" días
+    // antes, que hacía parecer que a la gráfica le faltaban las entradas más recientes.
     out.push({
       ...mergeExtra(chunk),
-      date: chunk[0].date,
+      date: chunk[chunk.length - 1].date,
       backlog: chunk[chunk.length - 1].backlog,
     } as T);
   }
