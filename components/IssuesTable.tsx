@@ -1,6 +1,6 @@
 'use client';
 
-import { Fragment, useState } from 'react';
+import { Fragment, useMemo, useState } from 'react';
 import { C, formatDate } from '@/lib/theme';
 import { StatusChip, PriorityPill, KeyLink } from '@/components/ui/Chips';
 
@@ -42,6 +42,24 @@ interface IssuesTableProps {
   subtasksLabel?: string;
   showActionPointType?: boolean;
   showSubtaskInvolvedGroup?: boolean;
+  showFilters?: boolean;
+}
+
+const ALL = '__all__';
+
+const selectStyle: React.CSSProperties = {
+  padding: '9px 12px',
+  border: `1px solid ${C.g200}`,
+  borderRadius: 8,
+  fontSize: 13,
+  color: C.ink,
+  cursor: 'pointer',
+  outline: 'none',
+  backgroundColor: '#fff',
+};
+
+function uniqueSorted(values: string[]) {
+  return Array.from(new Set(values)).sort((a, b) => a.localeCompare(b));
 }
 
 const thStyle: React.CSSProperties = {
@@ -73,12 +91,41 @@ export default function IssuesTable({
   subtasksLabel = 'Subtareas',
   showActionPointType = false,
   showSubtaskInvolvedGroup = false,
+  showFilters = false,
 }: IssuesTableProps) {
   const showSecondGroupColumn = secondGroupColumn !== 'none';
   const columnCount =
     (showType ? 9 : 8) + (showSubtasks ? 1 : 0) - (showSecondGroupColumn ? 0 : 1) - (showAssignedGroup ? 0 : 1);
   const secondGroupLabel = secondGroupColumn === 'resolving' ? 'Grupo/s Resolutor/es' : 'Grupo Involucrado';
   const [expandedKeys, setExpandedKeys] = useState<Set<string>>(new Set());
+
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState(ALL);
+  const [priorityFilter, setPriorityFilter] = useState(ALL);
+
+  const statusOptions = useMemo(() => uniqueSorted(issues.map((i) => i.status)), [issues]);
+  const priorityOptions = useMemo(() => uniqueSorted(issues.map((i) => i.priority)), [issues]);
+
+  const filteredIssues = useMemo(() => {
+    if (!showFilters) return issues;
+    const term = search.trim().toLowerCase();
+    return issues.filter((issue) => {
+      if (statusFilter !== ALL && issue.status !== statusFilter) return false;
+      if (priorityFilter !== ALL && issue.priority !== priorityFilter) return false;
+      if (term && !issue.key.toLowerCase().includes(term) && !issue.summary.toLowerCase().includes(term)) {
+        return false;
+      }
+      return true;
+    });
+  }, [issues, showFilters, search, statusFilter, priorityFilter]);
+
+  const hasActiveFilters = search !== '' || statusFilter !== ALL || priorityFilter !== ALL;
+
+  const clearFilters = () => {
+    setSearch('');
+    setStatusFilter(ALL);
+    setPriorityFilter(ALL);
+  };
 
   const toggleExpanded = (key: string) => {
     setExpandedKeys((prev) => {
@@ -99,8 +146,64 @@ export default function IssuesTable({
     >
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
         <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, letterSpacing: '-.01em' }}>{title}</h3>
-        <span style={{ fontSize: 12.5, color: C.g400 }}>{countLabel ?? `${issues.length} en el periodo`}</span>
+        <span style={{ fontSize: 12.5, color: C.g400 }}>
+          {showFilters && filteredIssues.length !== issues.length
+            ? `${filteredIssues.length} de ${issues.length}`
+            : countLabel ?? `${issues.length} en el periodo`}
+        </span>
       </div>
+
+      {showFilters && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginBottom: 16 }}>
+          <div style={{ position: 'relative', flex: 1, minWidth: 220 }}>
+            <svg
+              style={{ position: 'absolute', left: 11, top: '50%', transform: 'translateY(-50%)', color: C.g400 }}
+              width="15"
+              height="15"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.2"
+              strokeLinecap="round"
+            >
+              <circle cx="11" cy="11" r="7" />
+              <path d="m21 21-4.3-4.3" />
+            </svg>
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Buscar por clave o resumen…"
+              className="mo-input"
+              style={{ width: '100%', padding: '9px 12px 9px 34px', border: `1px solid ${C.g200}`, borderRadius: 8, fontSize: 13, color: C.ink, outline: 'none' }}
+            />
+          </div>
+          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="mo-select" style={selectStyle}>
+            <option value={ALL}>Todos los estados</option>
+            {statusOptions.map((status) => (
+              <option key={status} value={status}>
+                {status}
+              </option>
+            ))}
+          </select>
+          <select value={priorityFilter} onChange={(e) => setPriorityFilter(e.target.value)} className="mo-select" style={selectStyle}>
+            <option value={ALL}>Todas las prioridades</option>
+            {priorityOptions.map((priority) => (
+              <option key={priority} value={priority}>
+                {priority}
+              </option>
+            ))}
+          </select>
+          {hasActiveFilters && (
+            <button
+              onClick={clearFilters}
+              style={{ padding: '9px 14px', background: 'none', border: `1px solid ${C.g200}`, borderRadius: 8, fontSize: 13, fontWeight: 600, color: C.orange, cursor: 'pointer' }}
+            >
+              Limpiar filtros
+            </button>
+          )}
+        </div>
+      )}
 
       <div style={{ overflowX: 'auto', margin: '0 -24px', padding: '0 24px' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 820 }}>
@@ -119,7 +222,7 @@ export default function IssuesTable({
             </tr>
           </thead>
           <tbody>
-            {issues.map((issue) => {
+            {filteredIssues.map((issue) => {
               const isExpanded = expandedKeys.has(issue.key);
               const canExpand = showSubtasks && issue.subtasksTotal > 0;
 
@@ -256,10 +359,12 @@ export default function IssuesTable({
                 </Fragment>
               );
             })}
-            {issues.length === 0 && (
+            {filteredIssues.length === 0 && (
               <tr>
                 <td colSpan={columnCount} style={{ padding: 40, textAlign: 'center', color: C.g400, fontSize: 13 }}>
-                  No hay problemas para mostrar en este periodo
+                  {issues.length === 0
+                    ? 'No hay problemas para mostrar en este periodo'
+                    : 'No hay problemas que coincidan con los filtros'}
                 </td>
               </tr>
             )}

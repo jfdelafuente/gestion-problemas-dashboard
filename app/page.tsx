@@ -522,6 +522,7 @@ export default function Home() {
               secondGroupColumn="none"
               showSubtasks
               subtasksLabel="PM Tasks"
+              showFilters
             />
           </>
         ) : activeTab === 'problema' ? (
@@ -576,6 +577,7 @@ export default function Home() {
               subtasksLabel="Action Points"
               showActionPointType
               showSubtaskInvolvedGroup
+              showFilters
             />
           </>
         ) : (
