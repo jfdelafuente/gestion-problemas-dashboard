@@ -13,6 +13,17 @@ import { C, formatDate } from '@/lib/theme';
 
 const DAY = 24 * 60 * 60 * 1000;
 
+function KpiSection({ title, last, children }: { title: string; last?: boolean; children: React.ReactNode }) {
+  return (
+    <div style={{ marginBottom: last ? 0 : 32 }}>
+      <h3 style={{ margin: '0 0 12px', fontSize: 15, fontWeight: 700, letterSpacing: '-.01em' }}>{title}</h3>
+      <div className="mo-anim" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(210px,1fr))', gap: 16 }}>
+        {children}
+      </div>
+    </div>
+  );
+}
+
 interface SubtaskRow {
   key: string;
   summary: string;
@@ -346,13 +357,6 @@ export default function Home() {
 
   const { periodStart, prevPeriodStart, periodEnd, rangeLabel } = useMemo(() => computePeriod(selectedDays), [selectedDays]);
 
-  // ---------- General ----------
-  const generalIssues = useMemo(() => byCreatedRange(stats.issues, periodStart, periodEnd), [stats.issues, periodStart, periodEnd]);
-  const generalStats = useMemo(() => buildStatsFromIssues(generalIssues), [generalIssues]);
-  const generalPrevIssues = useMemo(() => byCreatedRange(stats.issues, prevPeriodStart, periodStart), [stats.issues, prevPeriodStart, periodStart]);
-  const generalPrevStats = useMemo(() => buildStatsFromIssues(generalPrevIssues), [generalPrevIssues]);
-  const generalTimeline = useMemo(() => buildTimelineWithBacklog(generalIssues, selectedDays), [generalIssues, selectedDays]);
-
   // ---------- Postmortem ----------
   const postmortemIssues = useMemo(() => byCreatedRange(stats.issues, periodStart, periodEnd, 'Postmortem'), [stats.issues, periodStart, periodEnd]);
   const postmortemStats = useMemo(() => buildStatsFromIssues(postmortemIssues), [postmortemIssues]);
@@ -400,7 +404,7 @@ export default function Home() {
   const apPrevStats = useMemo(() => apStats(problemaPrevActionPoints), [problemaPrevActionPoints]);
 
   const tabHeadings: Record<Tab, { eyebrow: string; heading: string }> = {
-    general: { eyebrow: 'Vista general', heading: 'Todos los problemas y postmortems' },
+    general: { eyebrow: 'Vista general', heading: 'Resumen de Postmortems, PM Tasks, Problemas y Action Points' },
     postmortem: { eyebrow: 'Análisis de incidentes', heading: 'Postmortems' },
     pmtasks: { eyebrow: 'Tareas de postmortem', heading: 'PM Tasks de postmortems' },
     problema: { eyebrow: 'Gestión de problemas', heading: 'Problemas' },
@@ -443,48 +447,129 @@ export default function Home() {
           </div>
         ) : activeTab === 'general' ? (
           <>
-            <div className="mo-anim" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(210px,1fr))', gap: 16, marginBottom: 24 }}>
+            <KpiSection title="Postmortems">
               <KpiCard
-                label="Total de issues"
-                value={generalIssues.length}
+                label="Total Postmortems"
+                value={postmortemIssues.length}
                 tone={C.orange}
-                sub="Problemas + postmortems en el periodo"
-                delta={computeDelta(generalIssues.length, generalPrevIssues.length, 'down')}
+                sub="Abiertos en el periodo"
+                delta={computeDelta(postmortemIssues.length, postmortemPrevIssues.length, 'down')}
               />
               <KpiCard
                 label="Abiertos"
-                value={generalStats.totalOpen}
+                value={postmortemStats.totalOpen}
                 tone={C.danger}
-                sub="Requieren seguimiento activo"
-                delta={computeDelta(generalStats.totalOpen, generalPrevStats.totalOpen, 'down')}
+                sub="En curso o sin iniciar"
+                delta={computeDelta(postmortemStats.totalOpen, postmortemPrevStats.totalOpen, 'down')}
               />
               <KpiCard
                 label="Cerrados"
-                value={generalStats.totalClosed}
+                value={postmortemStats.totalClosed}
                 tone={C.success}
-                sub="Resueltos en el periodo"
-                delta={computeDelta(generalStats.totalClosed, generalPrevStats.totalClosed, 'up')}
+                sub="Con resolución registrada"
+                delta={computeDelta(postmortemStats.totalClosed, postmortemPrevStats.totalClosed, 'up')}
               />
               <KpiCard
                 label="Resolución media"
-                value={`${Math.round(generalStats.avgResolutionDays * 10) / 10}d`}
+                value={`${Math.round(postmortemStats.avgResolutionDays * 10) / 10}d`}
                 tone={C.g600}
-                sub="Días desde apertura a cierre"
-                delta={computeDelta(generalStats.avgResolutionDays, generalPrevStats.avgResolutionDays, 'down', { absolute: true, unit: 'd' })}
+                sub="Tiempo medio de cierre"
+                delta={computeDelta(postmortemStats.avgResolutionDays, postmortemPrevStats.avgResolutionDays, 'down', { absolute: true, unit: 'd' })}
               />
-            </div>
+            </KpiSection>
 
-            <StateAndPriorityChart byState={generalStats.byState} byPriority={generalStats.byPriority} />
-            <TimelineChart data={generalTimeline} subtitle="Entradas vs. resueltas · backlog acumulado" showBacklog />
+            <KpiSection title="PM Tasks">
+              <KpiCard
+                label="Total PM Tasks"
+                value={pmCurrentStats.total}
+                tone={C.orange}
+                sub="Derivadas de postmortems del periodo"
+                delta={computeDelta(pmCurrentStats.total, pmPrevStats.total, 'down')}
+              />
+              <KpiCard
+                label="Pendientes"
+                value={pmCurrentStats.pending}
+                tone={C.danger}
+                sub="Aún no cerradas"
+                delta={computeDelta(pmCurrentStats.pending, pmPrevStats.pending, 'down')}
+              />
+              <KpiCard
+                label="Completadas"
+                value={pmCurrentStats.done}
+                tone={C.success}
+                sub="Cerradas o resueltas"
+                delta={computeDelta(pmCurrentStats.done, pmPrevStats.done, 'up')}
+              />
+              <KpiCard
+                label="% Completado"
+                value={`${pmCurrentStats.pct}%`}
+                tone={C.g600}
+                sub="Sobre el total del periodo"
+                delta={computeDelta(pmCurrentStats.pct, pmPrevStats.pct, 'up')}
+              />
+            </KpiSection>
 
-            <IssuesTable
-              issues={generalIssues}
-              title="Detalle de issues"
-              countLabel={`${generalIssues.length} en el periodo`}
-              showType
-              showSubtasks
-              subtasksLabel="Subtareas"
-            />
+            <KpiSection title="Problemas">
+              <KpiCard
+                label="Total Problemas"
+                value={problemaIssues.length}
+                tone={C.orange}
+                sub="Abiertos en el periodo"
+                delta={computeDelta(problemaIssues.length, problemaPrevIssues.length, 'down')}
+              />
+              <KpiCard
+                label="Abiertos"
+                value={problemaStats.totalOpen}
+                tone={C.danger}
+                sub="En curso o sin iniciar"
+                delta={computeDelta(problemaStats.totalOpen, problemaPrevStats.totalOpen, 'down')}
+              />
+              <KpiCard
+                label="Cerrados"
+                value={problemaStats.totalClosed}
+                tone={C.success}
+                sub="Con resolución registrada"
+                delta={computeDelta(problemaStats.totalClosed, problemaPrevStats.totalClosed, 'up')}
+              />
+              <KpiCard
+                label="Resolución media"
+                value={`${Math.round(problemaStats.avgResolutionDays * 10) / 10}d`}
+                tone={C.g600}
+                sub="Tiempo medio de cierre"
+                delta={computeDelta(problemaStats.avgResolutionDays, problemaPrevStats.avgResolutionDays, 'down', { absolute: true, unit: 'd' })}
+              />
+            </KpiSection>
+
+            <KpiSection title="Action Points" last>
+              <KpiCard
+                label="Total Puntos de Acción"
+                value={apCurrentStats.total}
+                tone={C.orange}
+                sub="Derivados de problemas del periodo"
+                delta={computeDelta(apCurrentStats.total, apPrevStats.total, 'down')}
+              />
+              <KpiCard
+                label="Pendientes"
+                value={apCurrentStats.pending}
+                tone={C.danger}
+                sub="Aún no cerrados"
+                delta={computeDelta(apCurrentStats.pending, apPrevStats.pending, 'down')}
+              />
+              <KpiCard
+                label="Completados"
+                value={apCurrentStats.done}
+                tone={C.success}
+                sub="Cerrados o resueltos"
+                delta={computeDelta(apCurrentStats.done, apPrevStats.done, 'up')}
+              />
+              <KpiCard
+                label="% Completado"
+                value={`${apCurrentStats.pct}%`}
+                tone={C.g600}
+                sub="Sobre el total del periodo"
+                delta={computeDelta(apCurrentStats.pct, apPrevStats.pct, 'up')}
+              />
+            </KpiSection>
           </>
         ) : activeTab === 'postmortem' ? (
           <>
