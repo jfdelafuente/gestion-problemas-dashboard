@@ -8,6 +8,7 @@ import OpenByStatusChart from '@/components/OpenByStatusChart';
 import GroupByStatusChart from '@/components/GroupByStatusChart';
 import FilterBar from '@/components/FilterBar';
 import IssuesTable from '@/components/IssuesTable';
+import ActionPointsTable from '@/components/ActionPointsTable';
 
 interface SubtaskRow {
   key: string;
@@ -329,16 +330,6 @@ export default function Home() {
     () => problemaIssues.flatMap((issue) => issue.subtasks),
     [problemaIssues]
   );
-  const problemaApByAssignedGroup = useMemo(
-    () =>
-      buildGroupByStatus(
-        problemaFilteredActionPoints.map((t) => ({
-          status: t.status,
-          groups: t.assignedGroup ? [t.assignedGroup] : [],
-        }))
-      ),
-    [problemaFilteredActionPoints]
-  );
   const problemaApByInvolvedGroup = useMemo(
     () =>
       buildGroupByStatus(
@@ -541,22 +532,18 @@ export default function Home() {
               showSubtasks
               subtasksLabel="Action Points"
               showActionPointType
-              showSubtaskAssignedGroup
+              showSubtaskInvolvedGroup
             />
           </>
         ) : (
           <>
             {/* Action Points */}
             <GroupByStatusChart
-              data={problemaApByAssignedGroup.rows}
-              statuses={problemaApByAssignedGroup.statuses}
-              title="Action Points por Grupo Asignado y Estado"
-            />
-            <GroupByStatusChart
               data={problemaApByInvolvedGroup.rows}
               statuses={problemaApByInvolvedGroup.statuses}
               title="Action Points por Grupo Involucrado y Estado"
             />
+            <ActionPointsTable items={problemaFilteredActionPoints} />
           </>
         )}
       </div>

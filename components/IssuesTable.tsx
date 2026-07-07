@@ -10,6 +10,7 @@ interface SubtaskRow {
   done: boolean;
   actionPointType?: string;
   assignedGroup?: string;
+  involvedGroups?: string[];
 }
 
 interface IssueRow {
@@ -36,7 +37,7 @@ interface IssuesTableProps {
   showSubtasks?: boolean;
   subtasksLabel?: string;
   showActionPointType?: boolean;
-  showSubtaskAssignedGroup?: boolean;
+  showSubtaskInvolvedGroup?: boolean;
 }
 
 const PRIORITY_COLORS: Record<string, string> = {
@@ -64,7 +65,7 @@ export default function IssuesTable({
   showSubtasks = false,
   subtasksLabel = 'Subtareas',
   showActionPointType = false,
-  showSubtaskAssignedGroup = false,
+  showSubtaskInvolvedGroup = false,
 }: IssuesTableProps) {
   const showSecondGroupColumn = secondGroupColumn !== 'none';
   const columnCount =
@@ -180,8 +181,8 @@ export default function IssuesTable({
                               {showActionPointType && (
                                 <th className="text-left py-1 pr-4">Tipo de Punto de Acción</th>
                               )}
-                              {showSubtaskAssignedGroup && (
-                                <th className="text-left py-1 pr-4">Grupo Asignado</th>
+                              {showSubtaskInvolvedGroup && (
+                                <th className="text-left py-1 pr-4">Grupo Involucrado</th>
                               )}
                             </tr>
                           </thead>
@@ -210,8 +211,12 @@ export default function IssuesTable({
                                 {showActionPointType && (
                                   <td className="py-1 pr-4 text-gray-700 whitespace-nowrap">{task.actionPointType || '-'}</td>
                                 )}
-                                {showSubtaskAssignedGroup && (
-                                  <td className="py-1 pr-4 text-gray-700 whitespace-nowrap">{task.assignedGroup || '-'}</td>
+                                {showSubtaskInvolvedGroup && (
+                                  <td className="py-1 pr-4 text-gray-700 whitespace-nowrap">
+                                    {task.involvedGroups && task.involvedGroups.length > 0
+                                      ? task.involvedGroups.join(', ')
+                                      : '-'}
+                                  </td>
                                 )}
                               </tr>
                             ))}
