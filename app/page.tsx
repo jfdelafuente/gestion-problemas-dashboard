@@ -406,9 +406,18 @@ export default function Home() {
   const postmortemPrevIssues = useMemo(() => byCreatedRange(stats.issues, prevPeriodStart, periodStart, 'Postmortem'), [stats.issues, prevPeriodStart, periodStart]);
   const postmortemPrevStats = useMemo(() => buildStatsFromIssues(postmortemPrevIssues), [postmortemPrevIssues]);
   const postmortemAllIssues = useMemo(() => stats.issues.filter((issue) => issue.type === 'Postmortem'), [stats.issues]);
-  const postmortemPmTasks = useMemo(() => postmortemAllIssues.flatMap((issue) => issue.subtasks), [postmortemAllIssues]);
-  const postmortemTimeline = useMemo(() => buildTimelineWithBacklog(postmortemPmTasks, selectedDays), [postmortemPmTasks, selectedDays]);
-  const postmortemOpenByStatus = useMemo(() => buildOpenByStatusTimeline(postmortemPmTasks, selectedDays), [postmortemPmTasks, selectedDays]);
+  // Backlog e entradas/resueltas del propio Postmortem (no de sus PM Tasks): "no cerrados por
+  // día" tiene que contar postmortems sin resolutiondate, igual que el resto de KPIs de esta
+  // pestaña. `done` se deriva igual que en buildStatsFromIssues: cerrado = tiene resolutiondate.
+  const postmortemTimeline = useMemo(() => buildTimelineWithBacklog(postmortemAllIssues, selectedDays), [postmortemAllIssues, selectedDays]);
+  const postmortemOpenByStatus = useMemo(
+    () =>
+      buildOpenByStatusTimeline(
+        postmortemAllIssues.map((issue) => ({ ...issue, done: !!issue.resolutiondate })),
+        selectedDays
+      ),
+    [postmortemAllIssues, selectedDays]
+  );
   const postmortemFilteredPmTasks = useMemo(() => postmortemIssues.flatMap((issue) => issue.subtasks), [postmortemIssues]);
   const postmortemPmByAssignedGroup = useMemo(
     () =>
@@ -675,11 +684,11 @@ export default function Home() {
             </div>
 
             <StateAndPriorityChart byState={postmortemStats.byState} byPriority={postmortemStats.byPriority} />
-            <TimelineChart data={postmortemTimeline} subtitle="PM Tasks · entradas, resueltas y backlog" showBacklog />
+            <TimelineChart data={postmortemTimeline} subtitle="Postmortems · entradas, resueltas y backlog" showBacklog />
             <OpenByStatusChart
               data={postmortemOpenByStatus.rows}
               statuses={postmortemOpenByStatus.statuses}
-              title="PM Tasks no cerradas por estado"
+              title="Postmortems no cerrados por estado"
             />
 
             <IssuesTable
