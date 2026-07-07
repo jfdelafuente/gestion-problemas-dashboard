@@ -1,29 +1,33 @@
 # Dashboard de Problemas
 
-KPIs principales de issues de tipo "problema" desde Jira Cloud.
+Dashboard de seguimiento de Problemas, Postmortems y Action Points desde Jira (Server / Data Center), con el diseño visual de MASORANGE.
 
 ## Características
 
-- 📊 **KPIs Principales**:
-  - Total de problemas abiertos vs cerrados
-  - Distribución por estado (Abierto, En progreso, Cerrado)
-  - Distribución por prioridad (Alta, Media, Baja)
-  - Tendencia temporal (problemas creados/resueltos por día)
+- 📑 **4 pestañas**:
+  - **General**: todos los issues (Problema + Postmortem) del periodo
+  - **Postmortem**: KPIs y detalle de postmortems, con sus PM Tasks
+  - **Problema**: KPIs y detalle de problemas, con sus Action Points
+  - **Action Points**: desglose por Grupo Involucrado y tabla filtrable de todos los Action Points
+
+- 📊 **KPIs por pestaña**: total, abiertos/pendientes, cerrados/completados y tiempo medio de resolución, cada uno con una variación (`↑`/`↓`) respecto al periodo anterior equivalente.
+
+- 📈 **Gráficos** (SVG a medida, sin librería de gráficos):
+  - Distribución por estado y por prioridad (barra segmentada + leyenda)
+  - Tendencia temporal: entradas vs. resueltas + backlog acumulado
+  - No cerradas por estado + backlog acumulado (Postmortem y Problema)
+  - Action Points por Grupo Involucrado y estado
 
 - 🎛️ **Filtros**:
-  - Rango de fechas (7, 30, 90, 365 días)
-  - Actualización automática cada hora
-
-- 🎨 **Visualización**:
-  - Gráficos interactivos con Recharts
-  - Diseño responsive con Tailwind CSS
-  - Interfaz limpia y moderna
+  - Rango de fechas (7, 30, 90, 365 días), en la cabecera
+  - Búsqueda y filtros por estado/grupo en la tabla de Action Points
+  - Actualización automática cada hora, o manual con el botón "Actualizar"
 
 ## Requisitos
 
 - Node.js 18+
-- npm o yarn
-- Credenciales de Jira Cloud
+- npm
+- Un Personal Access Token (PAT) de una instancia de Jira Server/Data Center
 
 ## Instalación
 
@@ -32,124 +36,86 @@ KPIs principales de issues de tipo "problema" desde Jira Cloud.
    ```bash
    npm install
    ```
-
-3. Configura las variables de entorno en `.env.local`:
+3. Copia `.env.example` a `.env.local` y rellena tus credenciales (ver [SETUP_JIRA.md](SETUP_JIRA.md)):
+   ```bash
+   cp .env.example .env.local
    ```
-   NEXT_PUBLIC_JIRA_DOMAIN=your-domain.atlassian.net
-   JIRA_API_TOKEN=your-api-token
-   JIRA_EMAIL=your-email@company.com
-   NEXT_PUBLIC_JIRA_PROJECT_KEY=YOUR-PROJECT-KEY
+4. Inicia el servidor de desarrollo:
+   ```bash
+   npm run dev
    ```
+5. Abre [http://localhost:3000](http://localhost:3000)
 
-## Obtener credenciales de Jira
+## Autenticación con Jira
 
-1. **API Token**:
-   - Ve a https://id.atlassian.com/manage-profile/security/api-tokens
-   - Crea un nuevo token
-   - Copia el token
+Esta app está pensada para **Jira Server / Data Center**, no Jira Cloud: usa autenticación `Bearer` con un **Personal Access Token** generado desde el propio Jira (Perfil → Personal Access Tokens), no un API token de `id.atlassian.com`. Detalles paso a paso en [SETUP_JIRA.md](SETUP_JIRA.md).
 
-2. **Domain**:
-   - URL de tu Jira: `https://your-domain.atlassian.net/`
-   - El domain es: `your-domain.atlassian.net`
-
-3. **Email**:
-   - Tu email de cuenta de Atlassian
-
-4. **Project Key**:
-   - En Jira, ve a Project Settings
-   - El Project Key está en la URL o en la página principal (ej: `PROJ`)
-
-## Uso
-
-Inicia el servidor de desarrollo:
-
-```bash
-npm run dev
-```
-
-Abre [http://localhost:3000](http://localhost:3000) en tu navegador.
-
-## Estructura del Proyecto
+## Estructura del proyecto
 
 ```
 ├── app/
-│   ├── api/
-│   │   └── dashboard/
-│   │       └── route.ts           # API endpoint para datos del dashboard
-│   ├── layout.tsx                 # Layout raíz
-│   ├── page.tsx                   # Página principal del dashboard
-│   └── globals.css                # Estilos globales
+│   ├── api/dashboard/route.ts     # Único endpoint: agrega y devuelve los datos de Jira
+│   ├── layout.tsx                 # Fuentes (Inter/Roboto Mono) y layout raíz
+│   ├── page.tsx                   # Página principal: estado, filtros, pestañas y composición
+│   └── globals.css                # Tokens de diseño (colores, tipografía) y estilos globales
 ├── components/
-│   ├── StatsCard.tsx              # Tarjeta de estadística
-│   ├── StateAndPriorityChart.tsx  # Gráficos de estado y prioridad
-│   ├── TimelineChart.tsx          # Gráfico de tendencia temporal
-│   └── FilterBar.tsx              # Barra de filtros
+│   ├── DashboardHeader.tsx        # Cabecera negra: logo, tabs, selector de periodo
+│   ├── KpiCard.tsx                # Tarjeta KPI con pill de variación
+│   ├── StateAndPriorityChart.tsx  # Distribución por estado/prioridad (barra + leyenda)
+│   ├── TimelineChart.tsx          # Entradas/Resueltas/Backlog
+│   ├── OpenByStatusChart.tsx      # No cerradas por estado + backlog
+│   ├── GroupByStatusChart.tsx     # Desglose por grupo (barras horizontales)
+│   ├── IssuesTable.tsx            # Tabla de issues con fila expandible (PM Tasks/Action Points)
+│   ├── ActionPointsTable.tsx      # Tabla filtrable de Action Points
+│   ├── charts/                    # Primitivas de gráfico (SVG bar+line, leyenda, card)
+│   └── ui/Chips.tsx               # Chip de estado, pill de prioridad, enlace de clave
 ├── lib/
-│   └── jira.ts                    # Cliente y funciones de Jira
-├── .env.local                     # Variables de entorno (NO commitear)
+│   ├── jira.ts                    # Cliente Jira y agregación de datos (getDashboardStats)
+│   └── theme.ts                   # Colores por estado/prioridad, helpers de formato
+├── .env.local                     # Variables de entorno (NO se commitea)
 └── package.json
 ```
 
 ## Cómo funciona
 
-1. El dashboard se carga automáticamente al abrir la página
-2. El componente `page.tsx` llama al endpoint `/api/dashboard`
-3. El endpoint llama a la función `getDashboardStats()` en `lib/jira.ts`
-4. Esta función consulta los issues de Jira y calcula las estadísticas
-5. Los datos se devuelven como JSON y se muestran en los gráficos
-
-## Actualización de datos
-
-- **Manual**: Botón "Actualizar" en la esquina superior derecha
-- **Automática**: Cada hora (3600000 ms)
+1. `page.tsx` llama a `/api/dashboard?days=N` al cargar y cada vez que cambias el periodo.
+2. El endpoint llama a `getDashboardStats()` en `lib/jira.ts`, que pagina todos los issues del proyecto (filtrados por `"AP Área" = "+O IT"`) y sus subtareas (PM Tasks / Action Points).
+3. El cliente recibe la lista completa de issues y calcula en el navegador las estadísticas, gráficos y deltas de cada pestaña a partir del periodo seleccionado — el servidor no filtra por fecha, solo trae todo.
 
 ## Personalización
 
-### Cambiar el tipo de issue
+### Cambiar el filtro de issues
 
-En `lib/jira.ts`, modifica la variable `issueTypeCondition`:
+En `lib/jira.ts`, la consulta JQL está en `getIssuesByProject`:
 
 ```typescript
-const issueTypeCondition = `type = "Tarea"`; // Para tareas en lugar de problemas
+const jql = `project = ${PROJECT_KEY} AND "AP Área" = "+O IT"`;
 ```
 
-### Cambiar colores
+### Cambiar colores de estado/prioridad
 
-Los colores están definidos en los componentes de gráficos:
-- `StateAndPriorityChart.tsx`: `stateColors` y `priorityColors`
-- `StatsCard.tsx`: propiedad `color`
-
-### Agregar más KPIs
-
-1. Crea un nuevo componente en `components/`
-2. Agrega la lógica en `lib/jira.ts`
-3. Llámalo desde `page.tsx`
+Los mapas de color están en `lib/theme.ts` (`statusColor`, `priorityStyle`). Si aparecen estados de Jira que no estén en el mapa, se les asigna un color determinista de una paleta de reserva.
 
 ## Troubleshooting
 
-### Error: "node" no se reconoce
+### Error 403 al consultar Jira
 
-En Windows, asegúrate que Node.js está instalado y en el PATH.
-
-### Error: Unauthorized (401) de Jira
-
-- Verifica que el API Token sea correcto
-- Asegúrate que el email sea exactamente el de tu cuenta Atlassian
-- El token debe ser reciente (pueden expirar)
+- Confirma que `JIRA_API_TOKEN` es un **Personal Access Token** generado desde tu instancia de Jira, no un token de `id.atlassian.com`.
+- Revisa que el token no haya expirado.
 
 ### Sin datos en el dashboard
 
-- Verifica que el Project Key sea correcto
-- Asegúrate que hay issues de tipo "Problem" en tu proyecto
-- Revisa la consola del navegador para mensajes de error
+- Verifica que `NEXT_PUBLIC_JIRA_PROJECT_KEY` sea correcto.
+- Comprueba que hay issues que cumplan el filtro `"AP Área" = "+O IT"` en ese proyecto.
+- Revisa la consola del navegador y los logs del servidor (`npm run dev`) para ver errores de la API de Jira.
 
 ## Despliegue
 
-### En Vercel (recomendado)
+### En Vercel
 
 1. Sube el código a GitHub
 2. Crea un proyecto en Vercel conectado a tu repo
-3. Agrega las variables de entorno en Vercel Settings
+3. Agrega las variables de entorno de `.env.example` en Vercel Settings
 4. Vercel desplegará automáticamente
 
 ### En tu servidor
