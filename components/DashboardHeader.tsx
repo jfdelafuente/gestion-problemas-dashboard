@@ -52,7 +52,11 @@ export default function DashboardHeader({
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 18 }}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/assets/masorange-mark.svg" alt="MASORANGE" style={{ display: 'block', height: 30, width: 'auto' }} />
+          <img
+            src={`${process.env.NEXT_PUBLIC_BASE_PATH || ''}/assets/masorange-mark.svg`}
+            alt="MASORANGE"
+            style={{ display: 'block', height: 30, width: 'auto' }}
+          />
           <div style={{ width: 1, height: 34, background: 'rgba(255,255,255,.18)' }} />
           <div>
             <h1

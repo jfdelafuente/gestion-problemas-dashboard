@@ -330,7 +330,8 @@ export default function Home() {
   const fetchStats = async () => {
     try {
       setLoading(true);
-      const response = await fetch(`/api/dashboard?days=${selectedDays}`);
+      const basePath = process.env.NEXT_PUBLIC_BASE_PATH || '';
+      const response = await fetch(`${basePath}/api/dashboard?days=${selectedDays}`);
       if (!response.ok) {
         throw new Error('Error fetching dashboard stats');
       }
