@@ -362,6 +362,19 @@ export default function Home() {
   const postmortemPmTasks = useMemo(() => postmortemAllIssues.flatMap((issue) => issue.subtasks), [postmortemAllIssues]);
   const postmortemTimeline = useMemo(() => buildTimelineWithBacklog(postmortemPmTasks, selectedDays), [postmortemPmTasks, selectedDays]);
   const postmortemOpenByStatus = useMemo(() => buildOpenByStatusTimeline(postmortemPmTasks, selectedDays), [postmortemPmTasks, selectedDays]);
+  const postmortemFilteredPmTasks = useMemo(() => postmortemIssues.flatMap((issue) => issue.subtasks), [postmortemIssues]);
+  const postmortemPmByInvolvedGroup = useMemo(
+    () =>
+      buildGroupByStatus(
+        postmortemFilteredPmTasks.map((t) => ({ status: t.status, groups: t.involvedGroups || [] }))
+      ),
+    [postmortemFilteredPmTasks]
+  );
+
+  // ---------- PM Tasks KPIs (derived from Postmortem) ----------
+  const pmCurrentStats = useMemo(() => apStats(postmortemFilteredPmTasks), [postmortemFilteredPmTasks]);
+  const postmortemPrevPmTasks = useMemo(() => postmortemPrevIssues.flatMap((issue) => issue.subtasks), [postmortemPrevIssues]);
+  const pmPrevStats = useMemo(() => apStats(postmortemPrevPmTasks), [postmortemPrevPmTasks]);
 
   // ---------- Problema ----------
   const problemaIssues = useMemo(() => byCreatedRange(stats.issues, periodStart, periodEnd, 'Problema'), [stats.issues, periodStart, periodEnd]);
@@ -389,6 +402,7 @@ export default function Home() {
   const tabHeadings: Record<Tab, { eyebrow: string; heading: string }> = {
     general: { eyebrow: 'Vista general', heading: 'Todos los problemas y postmortems' },
     postmortem: { eyebrow: 'Análisis de incidentes', heading: 'Postmortems' },
+    pmtasks: { eyebrow: 'Tareas de postmortem', heading: 'PM Tasks de postmortems' },
     problema: { eyebrow: 'Gestión de problemas', heading: 'Problemas' },
     actionpoints: { eyebrow: 'Puntos de acción', heading: 'Action Points de problemas' },
   };
@@ -523,6 +537,51 @@ export default function Home() {
               showSubtasks
               subtasksLabel="PM Tasks"
               showFilters
+            />
+          </>
+        ) : activeTab === 'pmtasks' ? (
+          <>
+            <div className="mo-anim" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(210px,1fr))', gap: 16, marginBottom: 24 }}>
+              <KpiCard
+                label="Total PM Tasks"
+                value={pmCurrentStats.total}
+                tone={C.orange}
+                sub="Derivadas de postmortems del periodo"
+                delta={computeDelta(pmCurrentStats.total, pmPrevStats.total, 'down')}
+              />
+              <KpiCard
+                label="Pendientes"
+                value={pmCurrentStats.pending}
+                tone={C.danger}
+                sub="Aún no cerradas"
+                delta={computeDelta(pmCurrentStats.pending, pmPrevStats.pending, 'down')}
+              />
+              <KpiCard
+                label="Completadas"
+                value={pmCurrentStats.done}
+                tone={C.success}
+                sub="Cerradas o resueltas"
+                delta={computeDelta(pmCurrentStats.done, pmPrevStats.done, 'up')}
+              />
+              <KpiCard
+                label="% Completado"
+                value={`${pmCurrentStats.pct}%`}
+                tone={C.g600}
+                sub="Sobre el total del periodo"
+                delta={computeDelta(pmCurrentStats.pct, pmPrevStats.pct, 'up')}
+              />
+            </div>
+
+            <GroupByStatusChart
+              data={postmortemPmByInvolvedGroup.rows}
+              statuses={postmortemPmByInvolvedGroup.statuses}
+              title="PM Tasks por Grupo Involucrado y Estado"
+            />
+            <ActionPointsTable
+              items={postmortemFilteredPmTasks}
+              title="Detalle de PM Tasks"
+              emptyLabel="No hay PM Tasks que coincidan con los filtros"
+              showActionPointType={false}
             />
           </>
         ) : activeTab === 'problema' ? (

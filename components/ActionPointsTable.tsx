@@ -19,6 +19,9 @@ interface ActionPointRow {
 
 interface ActionPointsTableProps {
   items: ActionPointRow[];
+  title?: string;
+  emptyLabel?: string;
+  showActionPointType?: boolean;
 }
 
 const ALL = '__all__';
@@ -56,7 +59,13 @@ function uniqueSorted(values: Array<string | undefined>) {
   return Array.from(new Set(values.filter((v): v is string => !!v))).sort((a, b) => a.localeCompare(b));
 }
 
-export default function ActionPointsTable({ items }: ActionPointsTableProps) {
+export default function ActionPointsTable({
+  items,
+  title = 'Detalle de Puntos de Acción',
+  emptyLabel = 'No hay puntos de acción que coincidan con los filtros',
+  showActionPointType = true,
+}: ActionPointsTableProps) {
+  const columnCount = showActionPointType ? 8 : 7;
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState(ALL);
   const [assignedGroupFilter, setAssignedGroupFilter] = useState(ALL);
@@ -93,7 +102,7 @@ export default function ActionPointsTable({ items }: ActionPointsTableProps) {
       style={{ background: C.white, border: `1px solid ${C.g200}`, borderRadius: 14, padding: '22px 24px 12px', boxShadow: 'var(--shadow-1)' }}
     >
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
-        <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, letterSpacing: '-.01em' }}>Detalle de Puntos de Acción</h3>
+        <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, letterSpacing: '-.01em' }}>{title}</h3>
         <span style={{ fontSize: 12.5, color: C.g400 }}>
           {filteredItems.length === items.length ? `${items.length}` : `${filteredItems.length} de ${items.length}`}
         </span>
@@ -165,7 +174,7 @@ export default function ActionPointsTable({ items }: ActionPointsTableProps) {
               <th style={thStyle}>Resumen</th>
               <th style={thStyle}>Estado</th>
               <th style={thStyle}>Prioridad</th>
-              <th style={thStyle}>Tipo de Punto de Acción</th>
+              {showActionPointType && <th style={thStyle}>Tipo de Punto de Acción</th>}
               <th style={thStyle}>Grupo Involucrado</th>
               <th style={thStyle}>Creado</th>
               <th style={thStyle}>Resuelto</th>
@@ -184,7 +193,9 @@ export default function ActionPointsTable({ items }: ActionPointsTableProps) {
                 <td style={tdStyle}>
                   <PriorityPill priority={item.priority} />
                 </td>
-                <td style={{ ...tdStyle, whiteSpace: 'nowrap' }}>{item.actionPointType || '—'}</td>
+                {showActionPointType && (
+                  <td style={{ ...tdStyle, whiteSpace: 'nowrap' }}>{item.actionPointType || '—'}</td>
+                )}
                 <td style={{ ...tdStyle, color: C.g500 }}>
                   {item.involvedGroups && item.involvedGroups.length > 0 ? item.involvedGroups.join(', ') : '—'}
                 </td>
@@ -194,8 +205,8 @@ export default function ActionPointsTable({ items }: ActionPointsTableProps) {
             ))}
             {filteredItems.length === 0 && (
               <tr>
-                <td colSpan={8} style={{ padding: 40, textAlign: 'center', color: C.g400, fontSize: 13 }}>
-                  No hay puntos de acción que coincidan con los filtros
+                <td colSpan={columnCount} style={{ padding: 40, textAlign: 'center', color: C.g400, fontSize: 13 }}>
+                  {emptyLabel}
                 </td>
               </tr>
             )}

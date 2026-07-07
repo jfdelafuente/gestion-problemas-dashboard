@@ -2,11 +2,12 @@
 
 import { C } from '@/lib/theme';
 
-export type Tab = 'general' | 'postmortem' | 'problema' | 'actionpoints';
+export type Tab = 'general' | 'postmortem' | 'pmtasks' | 'problema' | 'actionpoints';
 
 const TABS: Array<{ id: Tab; label: string }> = [
   { id: 'general', label: 'General' },
   { id: 'postmortem', label: 'Postmortem' },
+  { id: 'pmtasks', label: 'PM Tasks' },
   { id: 'problema', label: 'Problema' },
   { id: 'actionpoints', label: 'Action Points' },
 ];
