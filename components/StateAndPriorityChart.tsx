@@ -1,3 +1,6 @@
+'use client';
+
+import { useState } from 'react';
 import { C, priorityStyle, statusColor, sortByStatusOrder } from '@/lib/theme';
 
 interface StateAndPriorityChartProps {
@@ -29,6 +32,7 @@ function DistributionPanel({
   colorFor: (key: string) => string;
   order: string[];
 }) {
+  const [hover, setHover] = useState<string | null>(null);
   const entries = order.filter((k) => data[k]).map((k) => [k, data[k]] as [string, number]);
   const total = entries.reduce((sum, [, v]) => sum + v, 0) || 1;
 
@@ -39,9 +43,47 @@ function DistributionPanel({
         <div style={{ fontSize: 13, color: C.g400 }}>Sin datos</div>
       ) : (
         <>
-          <div style={{ display: 'flex', height: 12, borderRadius: 999, overflow: 'hidden', background: C.g100 }}>
-            {entries.map(([k, v]) => (
-              <div key={k} title={`${k}: ${v}`} style={{ width: `${(v / total) * 100}%`, background: colorFor(k) }} />
+          {/* Sin overflow:hidden en la fila: recortaría el tooltip absoluto de cada segmento.
+              El redondeo de los extremos se aplica solo al primer/último segmento en su lugar. */}
+          <div style={{ display: 'flex', height: 12, borderRadius: 999, background: C.g100 }}>
+            {entries.map(([k, v], i) => (
+              <div
+                key={k}
+                onMouseEnter={() => setHover(k)}
+                onMouseLeave={() => setHover((cur) => (cur === k ? null : cur))}
+                style={{
+                  position: 'relative',
+                  width: `${(v / total) * 100}%`,
+                  background: colorFor(k),
+                  cursor: 'pointer',
+                  borderRadius:
+                    entries.length === 1 ? 999 : i === 0 ? '999px 0 0 999px' : i === entries.length - 1 ? '0 999px 999px 0' : 0,
+                }}
+              >
+                {hover === k && (
+                  <div
+                    style={{
+                      position: 'absolute',
+                      bottom: '100%',
+                      left: '50%',
+                      transform: 'translateX(-50%)',
+                      marginBottom: 8,
+                      background: C.ink,
+                      color: C.white,
+                      fontSize: 11.5,
+                      fontWeight: 600,
+                      padding: '5px 9px',
+                      borderRadius: 6,
+                      whiteSpace: 'nowrap',
+                      pointerEvents: 'none',
+                      boxShadow: 'var(--shadow-2)',
+                      zIndex: 5,
+                    }}
+                  >
+                    {k}: {v} ({Math.round((v / total) * 100)}%)
+                  </div>
+                )}
+              </div>
             ))}
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px 20px', marginTop: 16 }}>

@@ -1,13 +1,18 @@
-import { C } from '@/lib/theme';
+'use client';
+
+import { useState } from 'react';
+import { C, formatDate } from '@/lib/theme';
 
 export interface BarSpec {
   key: string;
   color: string;
+  label?: string;
 }
 
 export interface LineSpec {
   key: string;
   color: string;
+  label?: string;
 }
 
 interface BarLineChartProps {
@@ -19,6 +24,8 @@ interface BarLineChartProps {
 }
 
 export default function BarLineChart({ rows, bars, line, stacked = false, height = 300 }: BarLineChartProps) {
+  const [hoverIdx, setHoverIdx] = useState<number | null>(null);
+
   const W = 860;
   const H = height;
   const padL = 40;
@@ -64,6 +71,12 @@ export default function BarLineChart({ rows, bars, line, stacked = false, height
     );
   }
 
+  // Franja de resalte tras la columna sobre la que está el cursor, dibujada antes de las
+  // barras para que quede debajo de ellas.
+  if (hoverIdx !== null) {
+    els.push(<rect key="hover-col" x={padL + hoverIdx * gw} y={padT} width={gw} height={ph} fill={C.g50} />);
+  }
+
   const labelStep = Math.max(1, Math.ceil(formatted.length / 12));
   formatted.forEach((r, ri) => {
     const gx = padL + ri * gw;
@@ -105,7 +118,7 @@ export default function BarLineChart({ rows, bars, line, stacked = false, height
     els.push(<polyline key="ln" points={pts} fill="none" stroke={line.color} strokeWidth={2.5} strokeLinejoin="round" />);
     formatted.forEach((r, ri) =>
       els.push(
-        <circle key={'d' + ri} cx={padL + ri * gw + gw / 2} cy={yR(Number(r[line.key]) || 0)} r={2.6} fill={line.color} />
+        <circle key={'d' + ri} cx={padL + ri * gw + gw / 2} cy={yR(Number(r[line.key]) || 0)} r={hoverIdx === ri ? 4 : 2.6} fill={line.color} />
       )
     );
     for (let i = 0; i <= 4; i++) {
@@ -118,9 +131,71 @@ export default function BarLineChart({ rows, bars, line, stacked = false, height
     }
   }
 
+  // Rects invisibles, uno por columna, para capturar el hover con un área generosa
+  // (mucho más fácil de acertar con el ratón que una barra estrecha de pocos px).
+  formatted.forEach((r, ri) => {
+    els.push(
+      <rect
+        key={'hit' + ri}
+        x={padL + ri * gw}
+        y={padT}
+        width={gw}
+        height={ph}
+        fill="transparent"
+        onMouseEnter={() => setHoverIdx(ri)}
+        onMouseLeave={() => setHoverIdx((cur) => (cur === ri ? null : cur))}
+        style={{ cursor: 'pointer' }}
+      />
+    );
+  });
+
+  const hoverRow = hoverIdx !== null ? formatted[hoverIdx] : null;
+  const tooltipPct = hoverIdx !== null ? ((padL + hoverIdx * gw + gw / 2) / W) * 100 : 0;
+  const tooltipAlign = hoverIdx === null ? 'center' : hoverIdx < n * 0.15 ? 'left' : hoverIdx > n * 0.85 ? 'right' : 'center';
+
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: 'auto', display: 'block' }}>
-      {els}
-    </svg>
+    <div style={{ position: 'relative' }}>
+      <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: 'auto', display: 'block' }}>
+        {els}
+      </svg>
+      {hoverRow && (
+        <div
+          style={{
+            position: 'absolute',
+            left: `${tooltipPct}%`,
+            top: 2,
+            transform: tooltipAlign === 'left' ? 'translateX(-6%)' : tooltipAlign === 'right' ? 'translateX(-94%)' : 'translateX(-50%)',
+            background: C.ink,
+            color: C.white,
+            borderRadius: 8,
+            padding: '9px 12px',
+            fontSize: 12,
+            lineHeight: 1.5,
+            pointerEvents: 'none',
+            whiteSpace: 'nowrap',
+            boxShadow: 'var(--shadow-2)',
+            zIndex: 5,
+          }}
+        >
+          <div style={{ fontWeight: 700, marginBottom: 4, color: '#fff' }}>
+            {typeof hoverRow.date === 'string' ? formatDate(hoverRow.date) : hoverRow.displayLabel}
+          </div>
+          {bars.map((b) => (
+            <div key={b.key} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span style={{ width: 8, height: 8, borderRadius: 2, background: b.color, flexShrink: 0 }} />
+              <span style={{ color: 'rgba(255,255,255,.75)' }}>{b.label || b.key}:</span>
+              <span style={{ fontWeight: 700, marginLeft: 'auto', paddingLeft: 8 }}>{Number(hoverRow[b.key]) || 0}</span>
+            </div>
+          ))}
+          {line && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: bars.length ? 4 : 0, paddingTop: bars.length ? 4 : 0, borderTop: bars.length ? '1px solid rgba(255,255,255,.18)' : 'none' }}>
+              <span style={{ width: 12, height: 2, background: line.color, flexShrink: 0 }} />
+              <span style={{ color: 'rgba(255,255,255,.75)' }}>{line.label || line.key}:</span>
+              <span style={{ fontWeight: 700, marginLeft: 'auto', paddingLeft: 8 }}>{Number(hoverRow[line.key]) || 0}</span>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
