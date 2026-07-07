@@ -1,26 +1,124 @@
 @import "tailwindcss";
 
+/* ============================================================
+   MASORANGE Design Tokens — Colors & Type
+   ============================================================ */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --mo-black: #000000;
+  --mo-white: #ffffff;
+  --mo-orange: #ff7900;
+  --mo-orange-hover: #e66d00;
+  --mo-orange-tint: #ffe7d1;
+  --mo-yellow: #ffd200;
+
+  --mo-grey-50: #f7f6f4;
+  --mo-grey-100: #efede9;
+  --mo-grey-200: #dedad3;
+  --mo-grey-300: #b8b2a9;
+  --mo-grey-400: #8a857c;
+  --mo-grey-500: #5c5852;
+  --mo-grey-600: #3d3a36;
+  --mo-grey-700: #26241f;
+  --mo-grey-900: #0c0b09;
+
+  --fg-1: var(--mo-black);
+  --fg-2: var(--mo-grey-600);
+  --fg-3: var(--mo-grey-400);
+
+  --bg-1: var(--mo-white);
+  --bg-2: var(--mo-grey-50);
+  --bg-3: var(--mo-grey-100);
+
+  --border-1: var(--mo-grey-200);
+  --border-2: var(--mo-grey-300);
+
+  --success: #1d8754;
+  --warning: #e6a100;
+  --danger: #d43a2f;
+  --info: #2e6bd4;
+
+  --font-display: "Helvetica Neue", "Helvetica", var(--font-body), system-ui, sans-serif;
+
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.06);
+  --shadow-2: 0 4px 12px rgba(0, 0, 0, 0.08);
+  --shadow-focus: 0 0 0 3px rgba(255, 121, 0, 0.35);
+
+  --ease-out: cubic-bezier(0.2, 0.7, 0.2, 1);
+  --ease-emph: cubic-bezier(0.16, 1, 0.3, 1);
+  --dur-fast: 120ms;
+  --dur-slow: 420ms;
+
+  --background: var(--bg-2);
+  --foreground: var(--fg-1);
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: var(--font-body);
+  --font-mono: var(--font-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+* {
+  box-sizing: border-box;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
+}
+
+a {
+  color: var(--mo-orange);
+}
+a:hover {
+  color: var(--mo-orange-hover);
+}
+
+table {
+  border-collapse: collapse;
+}
+
+::-webkit-scrollbar {
+  height: 10px;
+  width: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--mo-grey-200);
+  border-radius: 999px;
+}
+
+select {
+  appearance: none;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%235C5852' stroke-width='3'><path d='M6 9l6 6 6-6'/></svg>");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  padding-right: 30px !important;
+}
+
+@keyframes moUp {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.mo-anim {
+  animation: moUp var(--dur-slow) var(--ease-emph) both;
+}
+
+.mo-refresh-btn:hover {
+  background: var(--mo-orange-hover) !important;
+}
+
+.mo-input:focus,
+.mo-select:focus {
+  outline: none;
+  border-color: var(--mo-orange) !important;
+  box-shadow: var(--shadow-focus);
 }

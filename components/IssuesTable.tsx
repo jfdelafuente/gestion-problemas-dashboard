@@ -1,6 +1,8 @@
 'use client';
 
 import { Fragment, useState } from 'react';
+import { C, formatDate } from '@/lib/theme';
+import { StatusChip, PriorityPill, KeyLink } from '@/components/ui/Chips';
 
 interface SubtaskRow {
   key: string;
@@ -31,6 +33,8 @@ interface IssueRow {
 
 interface IssuesTableProps {
   issues: IssueRow[];
+  title?: string;
+  countLabel?: string;
   showType?: boolean;
   showAssignedGroup?: boolean;
   secondGroupColumn?: 'involved' | 'resolving' | 'none';
@@ -40,25 +44,28 @@ interface IssuesTableProps {
   showSubtaskInvolvedGroup?: boolean;
 }
 
-const PRIORITY_COLORS: Record<string, string> = {
-  Highest: 'bg-red-100 text-red-800',
-  High: 'bg-orange-100 text-orange-800',
-  Medium: 'bg-yellow-100 text-yellow-800',
-  Low: 'bg-green-100 text-green-800',
-  Lowest: 'bg-gray-100 text-gray-800',
+const thStyle: React.CSSProperties = {
+  textAlign: 'left',
+  padding: '0 14px 10px',
+  fontSize: 10.5,
+  fontWeight: 700,
+  textTransform: 'uppercase',
+  letterSpacing: '.07em',
+  color: C.g400,
+  whiteSpace: 'nowrap',
 };
 
-function formatDate(value?: string) {
-  if (!value) return '-';
-  return new Date(value).toLocaleDateString('es-ES');
-}
-
-function issueUrl(key: string) {
-  return `https://${process.env.NEXT_PUBLIC_JIRA_DOMAIN}/browse/${key}`;
-}
+const tdStyle: React.CSSProperties = {
+  padding: '12px 14px',
+  fontSize: 13,
+  color: C.g700,
+  verticalAlign: 'top',
+};
 
 export default function IssuesTable({
   issues,
+  title = 'Detalle de Problemas',
+  countLabel,
   showType = true,
   showAssignedGroup = true,
   secondGroupColumn = 'involved',
@@ -86,142 +93,163 @@ export default function IssuesTable({
   };
 
   return (
-    <div className="bg-white rounded-lg shadow-md p-6 mt-8">
-      <h2 className="text-lg font-semibold text-gray-900 mb-4">
-        Detalle de Problemas ({issues.length})
-      </h2>
-      <div className="overflow-x-auto">
-        <table className="min-w-full divide-y divide-gray-200">
+    <div
+      className="mo-anim"
+      style={{ background: C.white, border: `1px solid ${C.g200}`, borderRadius: 14, padding: '22px 24px 12px', boxShadow: 'var(--shadow-1)' }}
+    >
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
+        <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, letterSpacing: '-.01em' }}>{title}</h3>
+        <span style={{ fontSize: 12.5, color: C.g400 }}>{countLabel ?? `${issues.length} en el periodo`}</span>
+      </div>
+
+      <div style={{ overflowX: 'auto', margin: '0 -24px', padding: '0 24px' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 820 }}>
           <thead>
-            <tr>
-              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Clave</th>
-              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Resumen</th>
-              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Estado</th>
-              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Prioridad</th>
-              {showType && (
-                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Tipo</th>
-              )}
-              {showAssignedGroup && (
-                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Grupo Asignado</th>
-              )}
-              {showSecondGroupColumn && (
-                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">{secondGroupLabel}</th>
-              )}
-              {showSubtasks && (
-                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">{subtasksLabel}</th>
-              )}
-              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Creado</th>
-              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Resuelto</th>
+            <tr style={{ borderBottom: `2px solid ${C.g100}` }}>
+              <th style={thStyle}>Clave</th>
+              <th style={thStyle}>Resumen</th>
+              <th style={thStyle}>Estado</th>
+              <th style={thStyle}>Prioridad</th>
+              {showType && <th style={thStyle}>Tipo</th>}
+              {showAssignedGroup && <th style={thStyle}>Grupo Asignado</th>}
+              {showSecondGroupColumn && <th style={thStyle}>{secondGroupLabel}</th>}
+              {showSubtasks && <th style={thStyle}>{subtasksLabel}</th>}
+              <th style={thStyle}>Creado</th>
+              <th style={thStyle}>Resuelto</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-100">
+          <tbody>
             {issues.map((issue) => {
               const isExpanded = expandedKeys.has(issue.key);
               const canExpand = showSubtasks && issue.subtasksTotal > 0;
 
               return (
                 <Fragment key={issue.key}>
-                  <tr className="hover:bg-gray-50">
-                    <td className="px-4 py-2 text-sm font-medium whitespace-nowrap">
-                      <a
-                        href={issueUrl(issue.key)}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-blue-600 hover:underline"
-                      >
-                        {issue.key}
-                      </a>
+                  <tr style={{ borderBottom: `1px solid ${C.g100}`, background: isExpanded ? C.g50 : 'transparent', transition: 'background .12s' }}>
+                    <td style={{ ...tdStyle, whiteSpace: 'nowrap' }}>
+                      <KeyLink jiraKey={issue.key} />
                     </td>
-                    <td className="px-4 py-2 text-sm text-gray-700">{issue.summary}</td>
-                    <td className="px-4 py-2 text-sm text-gray-700 whitespace-nowrap">{issue.status}</td>
-                    <td className="px-4 py-2 whitespace-nowrap">
-                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${PRIORITY_COLORS[issue.priority] || 'bg-gray-100 text-gray-800'}`}>
-                        {issue.priority}
-                      </span>
+                    <td style={{ ...tdStyle, minWidth: 260, color: C.ink, fontWeight: 500 }}>{issue.summary}</td>
+                    <td style={tdStyle}>
+                      <StatusChip status={issue.status} />
                     </td>
-                    {showType && (
-                      <td className="px-4 py-2 text-sm text-gray-700 whitespace-nowrap">{issue.type}</td>
-                    )}
-                    {showAssignedGroup && (
-                      <td className="px-4 py-2 text-sm text-gray-700 whitespace-nowrap">{issue.assignedGroup}</td>
-                    )}
+                    <td style={tdStyle}>
+                      <PriorityPill priority={issue.priority} />
+                    </td>
+                    {showType && <td style={{ ...tdStyle, whiteSpace: 'nowrap' }}>{issue.type}</td>}
+                    {showAssignedGroup && <td style={{ ...tdStyle, whiteSpace: 'nowrap' }}>{issue.assignedGroup}</td>}
                     {showSecondGroupColumn && (
-                      <td className="px-4 py-2 text-sm text-gray-700">
+                      <td style={{ ...tdStyle, color: C.g500 }}>
                         {secondGroupColumn === 'resolving' ? issue.resolvingGroups : issue.involvedGroups}
                       </td>
                     )}
                     {showSubtasks && (
-                      <td className="px-4 py-2 text-sm text-gray-700 whitespace-nowrap">
+                      <td style={{ ...tdStyle, whiteSpace: 'nowrap' }}>
                         {canExpand ? (
                           <button
                             onClick={() => toggleExpanded(issue.key)}
-                            className="flex items-center gap-1 text-blue-600 hover:text-blue-800"
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: 7,
+                              background: 'none',
+                              border: 'none',
+                              cursor: 'pointer',
+                              font: 'inherit',
+                              color: C.g700,
+                              padding: 0,
+                            }}
                           >
-                            <span>{isExpanded ? '▾' : '▸'}</span>
-                            <span>{issue.subtasksDone}/{issue.subtasksTotal}</span>
+                            <span
+                              style={{
+                                display: 'inline-flex',
+                                width: 18,
+                                height: 18,
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                borderRadius: 5,
+                                background: isExpanded ? C.orange : C.g100,
+                                color: isExpanded ? '#fff' : C.g500,
+                                fontSize: 10,
+                                transition: 'all .12s',
+                              }}
+                            >
+                              {isExpanded ? '▾' : '▸'}
+                            </span>
+                            <span style={{ fontVariantNumeric: 'tabular-nums' }}>
+                              {issue.subtasksDone}/{issue.subtasksTotal}
+                            </span>
                           </button>
                         ) : (
                           `${issue.subtasksDone}/${issue.subtasksTotal}`
                         )}
                       </td>
                     )}
-                    <td className="px-4 py-2 text-sm text-gray-500 whitespace-nowrap">{formatDate(issue.created)}</td>
-                    <td className="px-4 py-2 text-sm text-gray-500 whitespace-nowrap">{formatDate(issue.resolutiondate)}</td>
+                    <td style={{ ...tdStyle, whiteSpace: 'nowrap', color: C.g400 }}>{formatDate(issue.created)}</td>
+                    <td style={{ ...tdStyle, whiteSpace: 'nowrap', color: C.g400 }}>{formatDate(issue.resolutiondate)}</td>
                   </tr>
                   {canExpand && isExpanded && (
                     <tr>
-                      <td colSpan={columnCount} className="px-4 py-3 bg-blue-50 border-l-4 border-blue-300">
-                        <table className="min-w-full font-mono text-xs">
-                          <thead>
-                            <tr className="text-[10px] font-medium text-blue-700 uppercase">
-                              <th className="text-left py-1 pr-4">Clave</th>
-                              <th className="text-left py-1 pr-4">Resumen</th>
-                              <th className="text-left py-1 pr-4">Estado</th>
-                              <th className="text-left py-1 pr-4">Prioridad</th>
-                              {showActionPointType && (
-                                <th className="text-left py-1 pr-4">Tipo de Punto de Acción</th>
-                              )}
-                              {showSubtaskInvolvedGroup && (
-                                <th className="text-left py-1 pr-4">Grupo Involucrado</th>
-                              )}
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-blue-100">
-                            {issue.subtasks.map((task) => (
-                              <tr key={task.key}>
-                                <td className="py-1 pr-4 font-medium whitespace-nowrap">
-                                  <a
-                                    href={issueUrl(task.key)}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="text-blue-600 hover:underline"
-                                  >
-                                    {task.key}
-                                  </a>
-                                </td>
-                                <td className="py-1 pr-4 text-gray-700">{task.summary}</td>
-                                <td className="py-1 pr-4 text-gray-700 whitespace-nowrap">
-                                  {task.done ? '✅' : '⏳'} {task.status}
-                                </td>
-                                <td className="py-1 pr-4 whitespace-nowrap">
-                                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium ${PRIORITY_COLORS[task.priority] || 'bg-gray-100 text-gray-800'}`}>
-                                    {task.priority}
-                                  </span>
-                                </td>
+                      <td colSpan={columnCount} style={{ padding: '0 14px 14px' }}>
+                        <div style={{ borderLeft: `3px solid ${C.orange}`, background: C.orangeTint + '55', borderRadius: '0 8px 8px 0', padding: '12px 16px' }}>
+                          <div style={{ fontSize: 10.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.08em', color: C.g500, marginBottom: 8 }}>
+                            {subtasksLabel} · {issue.subtasksTotal}
+                          </div>
+                          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                            <thead>
+                              <tr>
+                                <th style={{ textAlign: 'left', padding: '0 12px 6px', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.06em', color: C.g400 }}>
+                                  Clave
+                                </th>
+                                <th style={{ textAlign: 'left', padding: '0 12px 6px', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.06em', color: C.g400 }}>
+                                  Resumen
+                                </th>
+                                <th style={{ textAlign: 'left', padding: '0 12px 6px', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.06em', color: C.g400 }}>
+                                  Estado
+                                </th>
+                                <th style={{ textAlign: 'left', padding: '0 12px 6px', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.06em', color: C.g400 }}>
+                                  Prioridad
+                                </th>
                                 {showActionPointType && (
-                                  <td className="py-1 pr-4 text-gray-700 whitespace-nowrap">{task.actionPointType || '-'}</td>
+                                  <th style={{ textAlign: 'left', padding: '0 12px 6px', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.06em', color: C.g400 }}>
+                                    Tipo de Punto de Acción
+                                  </th>
                                 )}
                                 {showSubtaskInvolvedGroup && (
-                                  <td className="py-1 pr-4 text-gray-700 whitespace-nowrap">
-                                    {task.involvedGroups && task.involvedGroups.length > 0
-                                      ? task.involvedGroups.join(', ')
-                                      : '-'}
-                                  </td>
+                                  <th style={{ textAlign: 'left', padding: '0 12px 6px', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.06em', color: C.g400 }}>
+                                    Grupo Involucrado
+                                  </th>
                                 )}
                               </tr>
-                            ))}
-                          </tbody>
-                        </table>
+                            </thead>
+                            <tbody>
+                              {issue.subtasks.map((task) => (
+                                <tr key={task.key} style={{ borderTop: `1px solid ${C.g200}` }}>
+                                  <td style={{ padding: '8px 12px' }}>
+                                    <KeyLink jiraKey={task.key} />
+                                  </td>
+                                  <td style={{ padding: '8px 12px', fontSize: 12.5, color: C.g700 }}>{task.summary}</td>
+                                  <td style={{ padding: '8px 12px' }}>
+                                    <StatusChip status={task.status} />
+                                  </td>
+                                  <td style={{ padding: '8px 12px' }}>
+                                    <PriorityPill priority={task.priority} />
+                                  </td>
+                                  {showActionPointType && (
+                                    <td style={{ padding: '8px 12px', fontSize: 12.5, color: C.g600, whiteSpace: 'nowrap' }}>
+                                      {task.actionPointType || '—'}
+                                    </td>
+                                  )}
+                                  {showSubtaskInvolvedGroup && (
+                                    <td style={{ padding: '8px 12px', fontSize: 12.5, color: C.g600, whiteSpace: 'nowrap' }}>
+                                      {task.involvedGroups && task.involvedGroups.length > 0 ? task.involvedGroups.join(', ') : '—'}
+                                    </td>
+                                  )}
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
                       </td>
                     </tr>
                   )}
@@ -230,8 +258,8 @@ export default function IssuesTable({
             })}
             {issues.length === 0 && (
               <tr>
-                <td colSpan={columnCount} className="px-4 py-6 text-center text-sm text-gray-500">
-                  No hay problemas para mostrar
+                <td colSpan={columnCount} style={{ padding: 40, textAlign: 'center', color: C.g400, fontSize: 13 }}>
+                  No hay problemas para mostrar en este periodo
                 </td>
               </tr>
             )}

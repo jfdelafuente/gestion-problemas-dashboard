@@ -1,44 +1,60 @@
-'use client';
-
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { C, statusColor, sortByStatusOrder } from '@/lib/theme';
+import ChartCard from '@/components/charts/ChartCard';
+import ChartLegend from '@/components/charts/ChartLegend';
 
 interface GroupByStatusChartProps {
   data: Array<Record<string, string | number>>;
   statuses: string[];
   title?: string;
+  subtitle?: string;
 }
-
-const STATUS_COLORS = ['#3b82f6', '#f59e0b', '#10b981', '#ef4444', '#8b5cf6', '#06b6d4', '#84cc16', '#ec4899'];
 
 export default function GroupByStatusChart({
   data,
   statuses,
   title = 'Action Points por Grupo Asignado y Estado',
+  subtitle = 'Apilado por estado',
 }: GroupByStatusChartProps) {
-  const chartHeight = Math.max(300, data.length * 32);
+  const orderedStatuses = sortByStatusOrder(statuses);
+  const maxTotal = Math.max(1, ...data.map((r) => Number(r.total) || 0));
 
   return (
-    <div className="bg-white rounded-lg shadow-md p-6 mt-6">
-      <h3 className="text-lg font-semibold text-gray-800 mb-4">{title}</h3>
-      <ResponsiveContainer width="100%" height={chartHeight}>
-        <BarChart data={data} layout="vertical" margin={{ left: 40 }}>
-          <CartesianGrid strokeDasharray="3 3" />
-          <XAxis type="number" allowDecimals={false} />
-          <YAxis type="category" dataKey="group" width={220} tick={{ fontSize: 12 }} />
-          <Tooltip />
-          <Legend />
-          {statuses.map((status, index) => (
-            <Bar
-              key={status}
-              dataKey={status}
-              stackId="status"
-              fill={STATUS_COLORS[index % STATUS_COLORS.length]}
-              name={status}
-              isAnimationActive={false}
-            />
-          ))}
-        </BarChart>
-      </ResponsiveContainer>
-    </div>
+    <ChartCard
+      title={title}
+      subtitle={subtitle}
+      legend={<ChartLegend items={orderedStatuses.map((s) => ({ name: s, color: statusColor(s) }))} />}
+    >
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 6 }}>
+        {data.map((row) => {
+          const total = Number(row.total) || 0;
+          return (
+            <div key={row.group} style={{ display: 'grid', gridTemplateColumns: '190px 1fr 34px', alignItems: 'center', gap: 12 }}>
+              <div style={{ fontSize: 12.5, color: C.g700, textAlign: 'right', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {row.group}
+              </div>
+              <div
+                style={{
+                  display: 'flex',
+                  height: 22,
+                  borderRadius: 5,
+                  overflow: 'hidden',
+                  background: C.g50,
+                  width: `${(total / maxTotal) * 100}%`,
+                  minWidth: 2,
+                }}
+              >
+                {orderedStatuses
+                  .filter((s) => Number(row[s]) > 0)
+                  .map((s) => (
+                    <div key={s} title={`${s}: ${row[s]}`} style={{ flex: Number(row[s]), background: statusColor(s) }} />
+                  ))}
+              </div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: C.ink }}>{total}</div>
+            </div>
+          );
+        })}
+        {data.length === 0 && <div style={{ fontSize: 13, color: C.g400 }}>Sin datos</div>}
+      </div>
+    </ChartCard>
   );
 }

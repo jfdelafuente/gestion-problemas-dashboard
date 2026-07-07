@@ -1,6 +1,8 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import { C, formatDate } from '@/lib/theme';
+import { StatusChip, PriorityPill, KeyLink } from '@/components/ui/Chips';
 
 interface ActionPointRow {
   key: string;
@@ -19,29 +21,39 @@ interface ActionPointsTableProps {
   items: ActionPointRow[];
 }
 
-const PRIORITY_COLORS: Record<string, string> = {
-  Highest: 'bg-red-100 text-red-800',
-  High: 'bg-orange-100 text-orange-800',
-  Medium: 'bg-yellow-100 text-yellow-800',
-  Low: 'bg-green-100 text-green-800',
-  Lowest: 'bg-gray-100 text-gray-800',
-};
-
 const ALL = '__all__';
 
-function formatDate(value?: string) {
-  if (!value) return '-';
-  return new Date(value).toLocaleDateString('es-ES');
-}
+const thStyle: React.CSSProperties = {
+  textAlign: 'left',
+  padding: '0 14px 10px',
+  fontSize: 10.5,
+  fontWeight: 700,
+  textTransform: 'uppercase',
+  letterSpacing: '.07em',
+  color: C.g400,
+  whiteSpace: 'nowrap',
+};
 
-function issueUrl(key: string) {
-  return `https://${process.env.NEXT_PUBLIC_JIRA_DOMAIN}/browse/${key}`;
-}
+const tdStyle: React.CSSProperties = {
+  padding: '12px 14px',
+  fontSize: 13,
+  color: C.g700,
+  verticalAlign: 'top',
+};
+
+const selectStyle: React.CSSProperties = {
+  padding: '9px 12px',
+  border: `1px solid ${C.g200}`,
+  borderRadius: 8,
+  fontSize: 13,
+  color: C.ink,
+  cursor: 'pointer',
+  outline: 'none',
+  backgroundColor: '#fff',
+};
 
 function uniqueSorted(values: Array<string | undefined>) {
-  return Array.from(new Set(values.filter((v): v is string => !!v))).sort((a, b) =>
-    a.localeCompare(b)
-  );
+  return Array.from(new Set(values.filter((v): v is string => !!v))).sort((a, b) => a.localeCompare(b));
 }
 
 export default function ActionPointsTable({ items }: ActionPointsTableProps) {
@@ -52,10 +64,7 @@ export default function ActionPointsTable({ items }: ActionPointsTableProps) {
 
   const statusOptions = useMemo(() => uniqueSorted(items.map((i) => i.status)), [items]);
   const assignedGroupOptions = useMemo(() => uniqueSorted(items.map((i) => i.assignedGroup)), [items]);
-  const involvedGroupOptions = useMemo(
-    () => uniqueSorted(items.flatMap((i) => i.involvedGroups || [])),
-    [items]
-  );
+  const involvedGroupOptions = useMemo(() => uniqueSorted(items.flatMap((i) => i.involvedGroups || [])), [items]);
 
   const filteredItems = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -63,9 +72,7 @@ export default function ActionPointsTable({ items }: ActionPointsTableProps) {
       if (statusFilter !== ALL && item.status !== statusFilter) return false;
       if (assignedGroupFilter !== ALL && item.assignedGroup !== assignedGroupFilter) return false;
       if (involvedGroupFilter !== ALL && !(item.involvedGroups || []).includes(involvedGroupFilter)) return false;
-      if (term && !item.key.toLowerCase().includes(term) && !item.summary.toLowerCase().includes(term)) {
-        return false;
-      }
+      if (term && !item.key.toLowerCase().includes(term) && !item.summary.toLowerCase().includes(term)) return false;
       return true;
     });
   }, [items, search, statusFilter, assignedGroupFilter, involvedGroupFilter]);
@@ -81,25 +88,42 @@ export default function ActionPointsTable({ items }: ActionPointsTableProps) {
   };
 
   return (
-    <div className="bg-white rounded-lg shadow-md p-6 mt-6">
-      <h2 className="text-lg font-semibold text-gray-900 mb-4">
-        Detalle de Action Points ({filteredItems.length}
-        {filteredItems.length !== items.length ? ` de ${items.length}` : ''})
-      </h2>
+    <div
+      className="mo-anim"
+      style={{ background: C.white, border: `1px solid ${C.g200}`, borderRadius: 14, padding: '22px 24px 12px', boxShadow: 'var(--shadow-1)' }}
+    >
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
+        <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, letterSpacing: '-.01em' }}>Detalle de Puntos de Acción</h3>
+        <span style={{ fontSize: 12.5, color: C.g400 }}>
+          {filteredItems.length === items.length ? `${items.length}` : `${filteredItems.length} de ${items.length}`}
+        </span>
+      </div>
 
-      <div className="flex flex-wrap gap-3 mb-4">
-        <input
-          type="text"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Buscar por clave o resumen..."
-          className="flex-1 min-w-[200px] px-3 py-2 border border-gray-300 rounded-md text-sm"
-        />
-        <select
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
-          className="px-3 py-2 border border-gray-300 rounded-md text-sm"
-        >
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginBottom: 16 }}>
+        <div style={{ position: 'relative', flex: 1, minWidth: 220 }}>
+          <svg
+            style={{ position: 'absolute', left: 11, top: '50%', transform: 'translateY(-50%)', color: C.g400 }}
+            width="15"
+            height="15"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.2"
+            strokeLinecap="round"
+          >
+            <circle cx="11" cy="11" r="7" />
+            <path d="m21 21-4.3-4.3" />
+          </svg>
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Buscar por clave o resumen…"
+            className="mo-input"
+            style={{ width: '100%', padding: '9px 12px 9px 34px', border: `1px solid ${C.g200}`, borderRadius: 8, fontSize: 13, color: C.ink, outline: 'none' }}
+          />
+        </div>
+        <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="mo-select" style={selectStyle}>
           <option value={ALL}>Todos los estados</option>
           {statusOptions.map((status) => (
             <option key={status} value={status}>
@@ -107,11 +131,7 @@ export default function ActionPointsTable({ items }: ActionPointsTableProps) {
             </option>
           ))}
         </select>
-        <select
-          value={assignedGroupFilter}
-          onChange={(e) => setAssignedGroupFilter(e.target.value)}
-          className="px-3 py-2 border border-gray-300 rounded-md text-sm"
-        >
+        <select value={assignedGroupFilter} onChange={(e) => setAssignedGroupFilter(e.target.value)} className="mo-select" style={selectStyle}>
           <option value={ALL}>Todos los grupos asignados</option>
           {assignedGroupOptions.map((group) => (
             <option key={group} value={group}>
@@ -119,11 +139,7 @@ export default function ActionPointsTable({ items }: ActionPointsTableProps) {
             </option>
           ))}
         </select>
-        <select
-          value={involvedGroupFilter}
-          onChange={(e) => setInvolvedGroupFilter(e.target.value)}
-          className="px-3 py-2 border border-gray-300 rounded-md text-sm"
-        >
+        <select value={involvedGroupFilter} onChange={(e) => setInvolvedGroupFilter(e.target.value)} className="mo-select" style={selectStyle}>
           <option value={ALL}>Todos los grupos involucrados</option>
           {involvedGroupOptions.map((group) => (
             <option key={group} value={group}>
@@ -134,63 +150,54 @@ export default function ActionPointsTable({ items }: ActionPointsTableProps) {
         {hasActiveFilters && (
           <button
             onClick={clearFilters}
-            className="px-3 py-2 text-sm text-blue-600 hover:underline"
+            style={{ padding: '9px 14px', background: 'none', border: `1px solid ${C.g200}`, borderRadius: 8, fontSize: 13, fontWeight: 600, color: C.orange, cursor: 'pointer' }}
           >
             Limpiar filtros
           </button>
         )}
       </div>
 
-      <div className="overflow-x-auto">
-        <table className="min-w-full divide-y divide-gray-200">
+      <div style={{ overflowX: 'auto', margin: '0 -24px', padding: '0 24px' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 900 }}>
           <thead>
-            <tr>
-              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Clave</th>
-              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Resumen</th>
-              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Estado</th>
-              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Prioridad</th>
-              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Tipo de Punto de Acción</th>
-              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Grupo Asignado</th>
-              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Grupo Involucrado</th>
-              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Creado</th>
-              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Resuelto</th>
+            <tr style={{ borderBottom: `2px solid ${C.g100}` }}>
+              <th style={thStyle}>Clave</th>
+              <th style={thStyle}>Resumen</th>
+              <th style={thStyle}>Estado</th>
+              <th style={thStyle}>Prioridad</th>
+              <th style={thStyle}>Tipo de Punto de Acción</th>
+              <th style={thStyle}>Grupo Asignado</th>
+              <th style={thStyle}>Grupo Involucrado</th>
+              <th style={thStyle}>Creado</th>
+              <th style={thStyle}>Resuelto</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-100">
+          <tbody>
             {filteredItems.map((item) => (
-              <tr key={item.key} className="hover:bg-gray-50">
-                <td className="px-4 py-2 text-sm font-medium whitespace-nowrap">
-                  <a
-                    href={issueUrl(item.key)}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-blue-600 hover:underline"
-                  >
-                    {item.key}
-                  </a>
+              <tr key={item.key} style={{ borderBottom: `1px solid ${C.g100}` }}>
+                <td style={{ ...tdStyle, whiteSpace: 'nowrap' }}>
+                  <KeyLink jiraKey={item.key} />
                 </td>
-                <td className="px-4 py-2 text-sm text-gray-700">{item.summary}</td>
-                <td className="px-4 py-2 text-sm text-gray-700 whitespace-nowrap">
-                  {item.done ? '✅' : '⏳'} {item.status}
+                <td style={{ ...tdStyle, minWidth: 280, color: C.ink, fontWeight: 500 }}>{item.summary}</td>
+                <td style={tdStyle}>
+                  <StatusChip status={item.status} />
                 </td>
-                <td className="px-4 py-2 whitespace-nowrap">
-                  <span className={`px-2 py-1 rounded-full text-xs font-medium ${PRIORITY_COLORS[item.priority] || 'bg-gray-100 text-gray-800'}`}>
-                    {item.priority}
-                  </span>
+                <td style={tdStyle}>
+                  <PriorityPill priority={item.priority} />
                 </td>
-                <td className="px-4 py-2 text-sm text-gray-700 whitespace-nowrap">{item.actionPointType || '-'}</td>
-                <td className="px-4 py-2 text-sm text-gray-700 whitespace-nowrap">{item.assignedGroup || '-'}</td>
-                <td className="px-4 py-2 text-sm text-gray-700">
-                  {item.involvedGroups && item.involvedGroups.length > 0 ? item.involvedGroups.join(', ') : '-'}
+                <td style={{ ...tdStyle, whiteSpace: 'nowrap' }}>{item.actionPointType || '—'}</td>
+                <td style={{ ...tdStyle, whiteSpace: 'nowrap', color: C.g500 }}>{item.assignedGroup || '—'}</td>
+                <td style={{ ...tdStyle, color: C.g500 }}>
+                  {item.involvedGroups && item.involvedGroups.length > 0 ? item.involvedGroups.join(', ') : '—'}
                 </td>
-                <td className="px-4 py-2 text-sm text-gray-500 whitespace-nowrap">{formatDate(item.created)}</td>
-                <td className="px-4 py-2 text-sm text-gray-500 whitespace-nowrap">{formatDate(item.resolutiondate)}</td>
+                <td style={{ ...tdStyle, whiteSpace: 'nowrap', color: C.g400 }}>{formatDate(item.created)}</td>
+                <td style={{ ...tdStyle, whiteSpace: 'nowrap', color: C.g400 }}>{formatDate(item.resolutiondate)}</td>
               </tr>
             ))}
             {filteredItems.length === 0 && (
               <tr>
-                <td colSpan={9} className="px-4 py-6 text-center text-sm text-gray-500">
-                  No hay Action Points para mostrar
+                <td colSpan={9} style={{ padding: 40, textAlign: 'center', color: C.g400, fontSize: 13 }}>
+                  No hay puntos de acción que coincidan con los filtros
                 </td>
               </tr>
             )}
