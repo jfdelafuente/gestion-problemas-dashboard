@@ -111,6 +111,10 @@ Los mapas de color están en `lib/theme.ts` (`statusColor`, `priorityStyle`). Si
 
 ## Despliegue
 
+Para el despliegue en el servidor compartido de `infocodes.si.orange.es`
+(nginx propio sin root/systemd, bajo el subpath `/problemas`), ver la guía
+completa en [DEPLOYMENT.md](DEPLOYMENT.md).
+
 ### En Vercel
 
 1. Sube el código a GitHub
