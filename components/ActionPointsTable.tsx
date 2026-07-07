@@ -22,6 +22,7 @@ interface ActionPointsTableProps {
   title?: string;
   emptyLabel?: string;
   showActionPointType?: boolean;
+  groupColumn?: 'involved' | 'assigned';
 }
 
 const ALL = '__all__';
@@ -64,8 +65,10 @@ export default function ActionPointsTable({
   title = 'Detalle de Puntos de Acción',
   emptyLabel = 'No hay puntos de acción que coincidan con los filtros',
   showActionPointType = true,
+  groupColumn = 'involved',
 }: ActionPointsTableProps) {
   const columnCount = showActionPointType ? 8 : 7;
+  const groupColumnLabel = groupColumn === 'assigned' ? 'Grupo Asignado' : 'Grupo Involucrado';
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState(ALL);
   const [assignedGroupFilter, setAssignedGroupFilter] = useState(ALL);
@@ -175,7 +178,7 @@ export default function ActionPointsTable({
               <th style={thStyle}>Estado</th>
               <th style={thStyle}>Prioridad</th>
               {showActionPointType && <th style={thStyle}>Tipo de Punto de Acción</th>}
-              <th style={thStyle}>Grupo Involucrado</th>
+              <th style={thStyle}>{groupColumnLabel}</th>
               <th style={thStyle}>Creado</th>
               <th style={thStyle}>Resuelto</th>
             </tr>
@@ -197,7 +200,11 @@ export default function ActionPointsTable({
                   <td style={{ ...tdStyle, whiteSpace: 'nowrap' }}>{item.actionPointType || '—'}</td>
                 )}
                 <td style={{ ...tdStyle, color: C.g500 }}>
-                  {item.involvedGroups && item.involvedGroups.length > 0 ? item.involvedGroups.join(', ') : '—'}
+                  {groupColumn === 'assigned'
+                    ? item.assignedGroup || '—'
+                    : item.involvedGroups && item.involvedGroups.length > 0
+                      ? item.involvedGroups.join(', ')
+                      : '—'}
                 </td>
                 <td style={{ ...tdStyle, whiteSpace: 'nowrap', color: C.g400 }}>{formatDate(item.created)}</td>
                 <td style={{ ...tdStyle, whiteSpace: 'nowrap', color: C.g400 }}>{formatDate(item.resolutiondate)}</td>

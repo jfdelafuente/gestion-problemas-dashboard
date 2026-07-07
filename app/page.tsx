@@ -363,10 +363,10 @@ export default function Home() {
   const postmortemTimeline = useMemo(() => buildTimelineWithBacklog(postmortemPmTasks, selectedDays), [postmortemPmTasks, selectedDays]);
   const postmortemOpenByStatus = useMemo(() => buildOpenByStatusTimeline(postmortemPmTasks, selectedDays), [postmortemPmTasks, selectedDays]);
   const postmortemFilteredPmTasks = useMemo(() => postmortemIssues.flatMap((issue) => issue.subtasks), [postmortemIssues]);
-  const postmortemPmByInvolvedGroup = useMemo(
+  const postmortemPmByAssignedGroup = useMemo(
     () =>
       buildGroupByStatus(
-        postmortemFilteredPmTasks.map((t) => ({ status: t.status, groups: t.involvedGroups || [] }))
+        postmortemFilteredPmTasks.map((t) => ({ status: t.status, groups: t.assignedGroup ? [t.assignedGroup] : [] }))
       ),
     [postmortemFilteredPmTasks]
   );
@@ -573,15 +573,16 @@ export default function Home() {
             </div>
 
             <GroupByStatusChart
-              data={postmortemPmByInvolvedGroup.rows}
-              statuses={postmortemPmByInvolvedGroup.statuses}
-              title="PM Tasks por Grupo Involucrado y Estado"
+              data={postmortemPmByAssignedGroup.rows}
+              statuses={postmortemPmByAssignedGroup.statuses}
+              title="PM Tasks por Grupo Asignado y Estado"
             />
             <ActionPointsTable
               items={postmortemFilteredPmTasks}
               title="Detalle de PM Tasks"
               emptyLabel="No hay PM Tasks que coincidan con los filtros"
               showActionPointType={false}
+              groupColumn="assigned"
             />
           </>
         ) : activeTab === 'problema' ? (
