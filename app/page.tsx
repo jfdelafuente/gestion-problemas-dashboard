@@ -438,9 +438,17 @@ export default function Home() {
   const problemaPrevIssues = useMemo(() => byCreatedRange(stats.issues, prevPeriodStart, periodStart, 'Problema'), [stats.issues, prevPeriodStart, periodStart]);
   const problemaPrevStats = useMemo(() => buildStatsFromIssues(problemaPrevIssues), [problemaPrevIssues]);
   const problemaAllIssues = useMemo(() => stats.issues.filter((issue) => issue.type === 'Problema'), [stats.issues]);
-  const problemaActionPoints = useMemo(() => problemaAllIssues.flatMap((issue) => issue.subtasks), [problemaAllIssues]);
-  const problemaTimeline = useMemo(() => buildTimelineWithBacklog(problemaActionPoints, selectedDays), [problemaActionPoints, selectedDays]);
-  const problemaOpenByStatus = useMemo(() => buildOpenByStatusTimeline(problemaActionPoints, selectedDays), [problemaActionPoints, selectedDays]);
+  // Backlog e entradas/resueltas del propio Problema (no de sus Action Points): mismo criterio
+  // que en Postmortem, "no cerrados por día" cuenta problemas sin resolutiondate.
+  const problemaTimeline = useMemo(() => buildTimelineWithBacklog(problemaAllIssues, selectedDays), [problemaAllIssues, selectedDays]);
+  const problemaOpenByStatus = useMemo(
+    () =>
+      buildOpenByStatusTimeline(
+        problemaAllIssues.map((issue) => ({ ...issue, done: !!issue.resolutiondate })),
+        selectedDays
+      ),
+    [problemaAllIssues, selectedDays]
+  );
   const problemaFilteredActionPoints = useMemo(() => problemaIssues.flatMap((issue) => issue.subtasks), [problemaIssues]);
   const problemaApByInvolvedGroup = useMemo(
     () =>
@@ -783,11 +791,11 @@ export default function Home() {
             </div>
 
             <StateAndPriorityChart byState={problemaStats.byState} byPriority={problemaStats.byPriority} />
-            <TimelineChart data={problemaTimeline} subtitle="Action Points · entradas, resueltas y backlog" showBacklog />
+            <TimelineChart data={problemaTimeline} subtitle="Problemas · entradas, resueltas y backlog" showBacklog />
             <OpenByStatusChart
               data={problemaOpenByStatus.rows}
               statuses={problemaOpenByStatus.statuses}
-              title="Action Points no cerrados por estado"
+              title="Problemas no cerrados por estado"
             />
 
             <IssuesTable
