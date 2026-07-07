@@ -166,7 +166,6 @@ export default function ActionPointsTable({ items }: ActionPointsTableProps) {
               <th style={thStyle}>Estado</th>
               <th style={thStyle}>Prioridad</th>
               <th style={thStyle}>Tipo de Punto de Acción</th>
-              <th style={thStyle}>Grupo Asignado</th>
               <th style={thStyle}>Grupo Involucrado</th>
               <th style={thStyle}>Creado</th>
               <th style={thStyle}>Resuelto</th>
@@ -186,7 +185,6 @@ export default function ActionPointsTable({ items }: ActionPointsTableProps) {
                   <PriorityPill priority={item.priority} />
                 </td>
                 <td style={{ ...tdStyle, whiteSpace: 'nowrap' }}>{item.actionPointType || '—'}</td>
-                <td style={{ ...tdStyle, whiteSpace: 'nowrap', color: C.g500 }}>{item.assignedGroup || '—'}</td>
                 <td style={{ ...tdStyle, color: C.g500 }}>
                   {item.involvedGroups && item.involvedGroups.length > 0 ? item.involvedGroups.join(', ') : '—'}
                 </td>
@@ -196,7 +194,7 @@ export default function ActionPointsTable({ items }: ActionPointsTableProps) {
             ))}
             {filteredItems.length === 0 && (
               <tr>
-                <td colSpan={9} style={{ padding: 40, textAlign: 'center', color: C.g400, fontSize: 13 }}>
+                <td colSpan={8} style={{ padding: 40, textAlign: 'center', color: C.g400, fontSize: 13 }}>
                   No hay puntos de acción que coincidan con los filtros
                 </td>
               </tr>
