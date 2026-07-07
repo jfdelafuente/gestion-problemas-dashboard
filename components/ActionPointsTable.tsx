@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { C, formatDate } from '@/lib/theme';
-import { StatusChip, PriorityPill, KeyLink } from '@/components/ui/Chips';
+import { StatusChip, PriorityPill, KeyLink, GroupTags } from '@/components/ui/Chips';
 
 interface ActionPointRow {
   key: string;
@@ -200,11 +200,7 @@ export default function ActionPointsTable({
                   <td style={{ ...tdStyle, whiteSpace: 'nowrap' }}>{item.actionPointType || '—'}</td>
                 )}
                 <td style={{ ...tdStyle, color: C.g500 }}>
-                  {groupColumn === 'assigned'
-                    ? item.assignedGroup || '—'
-                    : item.involvedGroups && item.involvedGroups.length > 0
-                      ? item.involvedGroups.join(', ')
-                      : '—'}
+                  {groupColumn === 'assigned' ? item.assignedGroup || '—' : <GroupTags groups={item.involvedGroups || []} />}
                 </td>
                 <td style={{ ...tdStyle, whiteSpace: 'nowrap', color: C.g400 }}>{formatDate(item.created)}</td>
                 <td style={{ ...tdStyle, whiteSpace: 'nowrap', color: C.g400 }}>{formatDate(item.resolutiondate)}</td>

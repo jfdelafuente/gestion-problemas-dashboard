@@ -2,7 +2,14 @@
 
 import { Fragment, useMemo, useState } from 'react';
 import { C, formatDate } from '@/lib/theme';
-import { StatusChip, PriorityPill, KeyLink } from '@/components/ui/Chips';
+import { StatusChip, PriorityPill, KeyLink, GroupTags } from '@/components/ui/Chips';
+
+function splitGroups(value: string) {
+  return value
+    .split(',')
+    .map((g) => g.trim())
+    .filter((g) => g && g !== '-');
+}
 
 interface SubtaskRow {
   key: string;
@@ -243,7 +250,7 @@ export default function IssuesTable({
                     {showAssignedGroup && <td style={{ ...tdStyle, whiteSpace: 'nowrap' }}>{issue.assignedGroup}</td>}
                     {showSecondGroupColumn && (
                       <td style={{ ...tdStyle, color: C.g500 }}>
-                        {secondGroupColumn === 'resolving' ? issue.resolvingGroups : issue.involvedGroups}
+                        <GroupTags groups={splitGroups(secondGroupColumn === 'resolving' ? issue.resolvingGroups : issue.involvedGroups)} />
                       </td>
                     )}
                     {showSubtasks && (
@@ -344,8 +351,8 @@ export default function IssuesTable({
                                     </td>
                                   )}
                                   {showSubtaskInvolvedGroup && (
-                                    <td style={{ padding: '8px 12px', fontSize: 12.5, color: C.g600, whiteSpace: 'nowrap' }}>
-                                      {task.involvedGroups && task.involvedGroups.length > 0 ? task.involvedGroups.join(', ') : '—'}
+                                    <td style={{ padding: '8px 12px', fontSize: 12.5, color: C.g600 }}>
+                                      <GroupTags groups={task.involvedGroups || []} />
                                     </td>
                                   )}
                                 </tr>

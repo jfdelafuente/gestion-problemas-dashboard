@@ -112,6 +112,15 @@ select {
   animation: moUp var(--dur-slow) var(--ease-emph) both;
 }
 
+@keyframes moSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.mo-spinner {
+  animation: moSpin 0.8s linear infinite;
+}
+
 .mo-refresh-btn:hover {
   background: var(--mo-orange-hover) !important;
 }
