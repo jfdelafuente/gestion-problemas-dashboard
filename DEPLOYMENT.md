@@ -1,6 +1,6 @@
 # Despliegue en producción (infocodes.si.orange.es)
 
-Guía para desplegar el **Dashboard de Gestión de Problemas** en `10.132.68.85:8081`
+Guía para desplegar el **Dashboard de Gestión de Problemas** en `10.132.26.96:8081`
 (`infocodes.si.orange.es`), un nginx compartido con otras aplicaciones que corre
 como usuario `infocodes` (uid 2001), sin root ni systemd.
 
@@ -11,6 +11,7 @@ servidor: no hay acceso SSH configurado desde este entorno de desarrollo.
 ## Índice
 
 1. [Prerrequisitos](#1-prerrequisitos)
+   - [Instalar Node.js si no está disponible](#instalar-nodejs-si-no-está-disponible)
 2. [Resumen de la topología](#resumen-de-la-topología)
 3. [Copiar el código al servidor](#3-copiar-el-código-al-servidor)
 4. [Instalar dependencias](#4-instalar-dependencias)
@@ -39,6 +40,52 @@ servidor: no hay acceso SSH configurado desde este entorno de desarrollo.
   (`/infocodes/nginx/sbin/nginx -s reload`), ambos ya cubiertos por ser
   propietario del árbol `/infocodes`.
 - El puerto **3001** libre en el servidor (ver aviso en la topología abajo).
+
+### Instalar Node.js si no está disponible
+
+El servidor no tenía Node.js instalado y **no hay salida directa a `nodejs.org`**:
+el proxy corporativo (`http_proxy`/`https_proxy`, ver `env`) intercepta el TLS de
+`nodejs.org` con un certificado propio de Orange no confiado por el sistema, así
+que tanto `curl` como cualquier instalador que llame a `nodejs.org` fallan con
+`SSL certificate problem: unable to get local issuer certificate` (código `000`).
+No es un problema de red ni de DNS — `curl` a `github.com` funciona con normalidad.
+
+La forma más simple de esquivarlo, sin tocar certificados en un servidor de
+producción, es descargar el tarball en **otra máquina con salida a internet**
+(tu puesto de desarrollo) y subirlo por `scp`:
+
+1. En tu máquina de desarrollo, descarga la versión LTS deseada (≥ 20.9) y
+   verifica su checksum contra `SHASUMS256.txt` de la misma versión:
+   ```bash
+   curl -sL https://nodejs.org/dist/v20.20.2/node-v20.20.2-linux-x64.tar.xz -o node-v20.20.2-linux-x64.tar.xz
+   curl -sL https://nodejs.org/dist/v20.20.2/SHASUMS256.txt -o SHASUMS256.txt
+   sha256sum node-v20.20.2-linux-x64.tar.xz   # compara con la línea correspondiente en SHASUMS256.txt
+   ```
+   (En Windows con `curl` del sistema, si aparece un error de revocación OCSP
+   —`schannel: ... CRYPT_E_NO_REVOCATION_CHECK`—, añade `--ssl-revoke-best-effort`.)
+2. Sube el tarball ya verificado al servidor:
+   ```bash
+   scp node-v20.20.2-linux-x64.tar.xz infocodes@10.132.26.96:/infocodes/
+   ```
+3. En el servidor, descomprímelo bajo su propia carpeta en `/infocodes` (mismo
+   patrón que ya se usa para `sqlite3`) y añade el `bin` al `PATH`:
+   ```bash
+   cd /infocodes
+   mkdir -p nodejs
+   tar -xJf node-v20.20.2-linux-x64.tar.xz -C nodejs --strip-components=1
+   rm node-v20.20.2-linux-x64.tar.xz
+   echo 'export PATH="/infocodes/nodejs/bin:$PATH"' >> ~/.profile
+   . ~/.profile
+   node -v && npm -v
+   ```
+   El shell de `infocodes` es `ksh` (`echo $SHELL`), y su shell de login lee
+   `~/.profile` — si el usuario que despliega usa otro shell, ajusta el fichero
+   (`~/.bashrc`, `~/.bash_profile`, etc.).
+
+Este `PATH` solo aplica a sesiones interactivas de login. El cron de
+[persistencia tras reinicio](#persistencia-tras-un-reinicio-del-servidor) no
+carga `~/.profile`, así que ahí hay que fijar el `PATH` explícitamente en la
+propia línea de `@reboot` (ya contemplado más abajo).
 
 ## Resumen de la topología
 
@@ -133,16 +180,23 @@ curl -s -o /dev/null -w "%{http_code}\n" http://localhost:3001/            # 404
 
 Sin root no se puede usar `pm2 startup` (genera una unidad systemd). En su
 lugar, añade una entrada al **crontab del propio usuario `infocodes`** (esto
-no requiere privilegios de root, cada usuario gestiona su propio crontab):
+no requiere privilegios de root, cada usuario gestiona su propio crontab).
+El servidor comparte el crontab con otras apps: para no arriesgarte a perder
+líneas existentes con un editor interactivo, añade la nueva al final así:
 
 ```bash
-crontab -e
-# añade la línea:
-@reboot cd /infocodes/project/gestion-problemas-dashboard && /usr/bin/env npx pm2 resurrect
+crontab -l > /tmp/mycron
+echo '@reboot cd /infocodes/project/gestion-problemas-dashboard && PATH=/infocodes/nodejs/bin:$PATH npx pm2 resurrect' >> /tmp/mycron
+crontab /tmp/mycron
+rm /tmp/mycron
+crontab -l   # confirma que se añadió sin tocar el resto
 ```
 
-Esto restaura los procesos guardados con `pm2 save` cuando el servidor
-arranque, sin necesitar systemd.
+El `PATH=/infocodes/nodejs/bin:$PATH` explícito en la propia línea es
+necesario porque los trabajos de `@reboot` no cargan `~/.profile`: sin él,
+`npx`/`pm2` no se encontrarían al arrancar el servidor. Esto restaura los
+procesos guardados con `pm2 save` cuando el servidor arranque, sin necesitar
+systemd.
 
 ## 9. Aplicar el bloque de nginx
 
@@ -183,7 +237,7 @@ Si el test es correcto, recarga (sin downtime, no reinicia conexiones activas):
 ## 10. Verificar
 
 ```bash
-curl -s -o /dev/null -w "%{http_code}\n" http://10.132.68.85:8081/problemas
+curl -s -o /dev/null -w "%{http_code}\n" http://10.132.26.96:8081/problemas
 npx pm2 status
 npx pm2 logs gestion-problemas-dashboard --lines 50
 ```
@@ -192,16 +246,80 @@ Desde un navegador: `http://infocodes.si.orange.es:8081/problemas`.
 
 ## Redespliegues posteriores
 
+Node.js, el `PATH` en `~/.profile`, el bloque de nginx y la entrada de
+crontab son de **una sola vez** — no hace falta repetirlos en cada
+redespliegue, solo la primera vez que se instala la app en un servidor nuevo.
+
+Checklist para actualizar la app ya desplegada:
+
+1. **Conecta por SSH como `infocodes`** y ve al proyecto:
+   ```bash
+   cd /infocodes/project/gestion-problemas-dashboard
+   ```
+2. **Comprueba que no hay cambios locales sin commitear** en el servidor
+   (no debería haberlos — el servidor no es donde se edita código — pero
+   evita pisar algo por error):
+   ```bash
+   git status
+   ```
+3. **Trae el código nuevo**:
+   ```bash
+   git pull
+   ```
+4. **Instala dependencias** (solo hace falta si cambió `package.json` /
+   `package-lock.json`, pero `npm ci` es rápido y seguro repetirlo siempre):
+   ```bash
+   npm ci
+   ```
+5. **Revisa que `NODE_ENV` no esté fijado** en la sesión antes de compilar
+   (un `NODE_ENV=development` persistente rompe `next build` con un error de
+   prerenderizado ilegible — ver [Solución de problemas](#npm-run-build-falla-con-un-error-de-prerenderizado-ilegible)):
+   ```bash
+   echo "NODE_ENV=[$NODE_ENV]"   # debe salir vacío; si no, `unset NODE_ENV`
+   ```
+6. **Compila**:
+   ```bash
+   npm run build
+   ```
+7. **Reinicia el proceso de pm2** (no hace falta `pm2 start` de nuevo, ya
+   está registrado):
+   ```bash
+   npx pm2 restart gestion-problemas-dashboard
+   ```
+8. **Verifica**:
+   ```bash
+   curl -s -o /dev/null -w "%{http_code}\n" http://localhost:3001/problemas   # 200
+   npx pm2 status
+   npx pm2 logs gestion-problemas-dashboard --lines 30
+   ```
+   y confirma visualmente en `http://infocodes.si.orange.es:8081/problemas`.
+
+De un tirón:
+
 ```bash
 cd /infocodes/project/gestion-problemas-dashboard
+git status
 git pull
 npm ci
+unset NODE_ENV
 npm run build
 npx pm2 restart gestion-problemas-dashboard
+curl -s -o /dev/null -w "%{http_code}\n" http://localhost:3001/problemas
 ```
 
-El bloque de nginx no cambia entre redespliegues salvo que cambie el puerto o
-la ruta — no hace falta repetir el [paso 9](#9-aplicar-el-bloque-de-nginx).
+**Cuándo sí hace falta tocar algo más:**
+- Si cambia `NEXT_PUBLIC_BASE_PATH` (la ruta pública): hay que actualizar
+  `.env.production.local` y recompilar — el valor queda incrustado en el
+  JavaScript del cliente en tiempo de build, reiniciar pm2 no basta.
+- Si cambia el puerto de la app o se añade una ruta nueva: repetir el
+  [paso 9](#9-aplicar-el-bloque-de-nginx) (editar `nginx.conf`, probar con
+  `-t` y recargar con `-s reload`).
+- Si rota el PAT de Jira: actualizar `JIRA_API_TOKEN` en `.env.local` y
+  reiniciar pm2 (no hace falta recompilar, son variables de servidor, no de
+  cliente).
+- Si se cambia de servidor o se reinstala desde cero: repetir todo el
+  documento desde el [paso 1](#1-prerrequisitos), incluida la instalación de
+  Node.js.
 
 ## Rollback
 
@@ -286,8 +404,9 @@ npx pm2 restart gestion-problemas-dashboard
 
 ## Referencia rápida
 
-Despliegue inicial completo, de un tirón (asumiendo `.env.local` y
-`.env.production.local` ya creados):
+Despliegue inicial completo, de un tirón (asumiendo Node.js ya instalado —
+ver [más arriba](#instalar-nodejs-si-no-está-disponible) si no—, y `.env.local`
+y `.env.production.local` ya creados):
 
 ```bash
 mkdir -p /infocodes/project/gestion-problemas-dashboard
@@ -297,19 +416,26 @@ npm ci
 npm run build
 npx pm2 start ecosystem.config.js
 npx pm2 save
+crontab -l > /tmp/mycron
+echo '@reboot cd /infocodes/project/gestion-problemas-dashboard && PATH=/infocodes/nodejs/bin:$PATH npx pm2 resurrect' >> /tmp/mycron
+crontab /tmp/mycron && rm /tmp/mycron
 diff /infocodes/nginx/conf/nginx.conf ./nginx.conf   # revisar antes de copiar
 cp ./nginx.conf /infocodes/nginx/conf/nginx.conf
 /infocodes/nginx/sbin/nginx -t -c /infocodes/nginx/conf/nginx.conf
 /infocodes/nginx/sbin/nginx -s reload -c /infocodes/nginx/conf/nginx.conf
-curl -s -o /dev/null -w "%{http_code}\n" http://10.132.68.85:8081/problemas
+curl -s -o /dev/null -w "%{http_code}\n" http://10.132.26.96:8081/problemas
 ```
 
-Redespliegue tras un cambio de código:
+Redespliegue tras un cambio de código (checklist completo en
+[Redespliegues posteriores](#redespliegues-posteriores)):
 
 ```bash
 cd /infocodes/project/gestion-problemas-dashboard
+git status
 git pull
 npm ci
+unset NODE_ENV
 npm run build
 npx pm2 restart gestion-problemas-dashboard
+curl -s -o /dev/null -w "%{http_code}\n" http://localhost:3001/problemas
 ```
