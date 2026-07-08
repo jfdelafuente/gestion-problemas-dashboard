@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { C, formatDate } from '@/lib/theme';
-import { StatusChip, PriorityPill, KeyLink } from '@/components/ui/Chips';
+import { StatusChip, PriorityPill, KeyLink, GroupTags } from '@/components/ui/Chips';
 
 interface ActionPointRow {
   key: string;
@@ -69,34 +69,43 @@ export default function ActionPointsTable({
 }: ActionPointsTableProps) {
   const columnCount = showActionPointType ? 8 : 7;
   const groupColumnLabel = groupColumn === 'assigned' ? 'Grupo Asignado' : 'Grupo Involucrado';
+  const groupFilterAllLabel = groupColumn === 'assigned' ? 'Todos los grupos asignados' : 'Todos los grupos involucrados';
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState(ALL);
-  const [assignedGroupFilter, setAssignedGroupFilter] = useState(ALL);
-  const [involvedGroupFilter, setInvolvedGroupFilter] = useState(ALL);
+  // Un único filtro de grupo, alineado con la única columna de grupo que muestra la tabla
+  // (Grupo Asignado en PM Tasks, Grupo Involucrado en Action Points): no tiene sentido filtrar
+  // por una dimensión que ni siquiera se ve en esta tabla.
+  const [groupFilter, setGroupFilter] = useState(ALL);
 
   const statusOptions = useMemo(() => uniqueSorted(items.map((i) => i.status)), [items]);
-  const assignedGroupOptions = useMemo(() => uniqueSorted(items.map((i) => i.assignedGroup)), [items]);
-  const involvedGroupOptions = useMemo(() => uniqueSorted(items.flatMap((i) => i.involvedGroups || [])), [items]);
+  const groupOptions = useMemo(
+    () =>
+      groupColumn === 'assigned'
+        ? uniqueSorted(items.map((i) => i.assignedGroup))
+        : uniqueSorted(items.flatMap((i) => i.involvedGroups || [])),
+    [items, groupColumn]
+  );
 
   const filteredItems = useMemo(() => {
     const term = search.trim().toLowerCase();
     return items.filter((item) => {
       if (statusFilter !== ALL && item.status !== statusFilter) return false;
-      if (assignedGroupFilter !== ALL && item.assignedGroup !== assignedGroupFilter) return false;
-      if (involvedGroupFilter !== ALL && !(item.involvedGroups || []).includes(involvedGroupFilter)) return false;
+      if (groupFilter !== ALL) {
+        const matches =
+          groupColumn === 'assigned' ? item.assignedGroup === groupFilter : (item.involvedGroups || []).includes(groupFilter);
+        if (!matches) return false;
+      }
       if (term && !item.key.toLowerCase().includes(term) && !item.summary.toLowerCase().includes(term)) return false;
       return true;
     });
-  }, [items, search, statusFilter, assignedGroupFilter, involvedGroupFilter]);
+  }, [items, search, statusFilter, groupFilter, groupColumn]);
 
-  const hasActiveFilters =
-    search !== '' || statusFilter !== ALL || assignedGroupFilter !== ALL || involvedGroupFilter !== ALL;
+  const hasActiveFilters = search !== '' || statusFilter !== ALL || groupFilter !== ALL;
 
   const clearFilters = () => {
     setSearch('');
     setStatusFilter(ALL);
-    setAssignedGroupFilter(ALL);
-    setInvolvedGroupFilter(ALL);
+    setGroupFilter(ALL);
   };
 
   return (
@@ -143,17 +152,9 @@ export default function ActionPointsTable({
             </option>
           ))}
         </select>
-        <select value={assignedGroupFilter} onChange={(e) => setAssignedGroupFilter(e.target.value)} className="mo-select" style={selectStyle}>
-          <option value={ALL}>Todos los grupos asignados</option>
-          {assignedGroupOptions.map((group) => (
-            <option key={group} value={group}>
-              {group}
-            </option>
-          ))}
-        </select>
-        <select value={involvedGroupFilter} onChange={(e) => setInvolvedGroupFilter(e.target.value)} className="mo-select" style={selectStyle}>
-          <option value={ALL}>Todos los grupos involucrados</option>
-          {involvedGroupOptions.map((group) => (
+        <select value={groupFilter} onChange={(e) => setGroupFilter(e.target.value)} className="mo-select" style={selectStyle}>
+          <option value={ALL}>{groupFilterAllLabel}</option>
+          {groupOptions.map((group) => (
             <option key={group} value={group}>
               {group}
             </option>
@@ -200,11 +201,7 @@ export default function ActionPointsTable({
                   <td style={{ ...tdStyle, whiteSpace: 'nowrap' }}>{item.actionPointType || '—'}</td>
                 )}
                 <td style={{ ...tdStyle, color: C.g500 }}>
-                  {groupColumn === 'assigned'
-                    ? item.assignedGroup || '—'
-                    : item.involvedGroups && item.involvedGroups.length > 0
-                      ? item.involvedGroups.join(', ')
-                      : '—'}
+                  {groupColumn === 'assigned' ? item.assignedGroup || '—' : <GroupTags groups={item.involvedGroups || []} />}
                 </td>
                 <td style={{ ...tdStyle, whiteSpace: 'nowrap', color: C.g400 }}>{formatDate(item.created)}</td>
                 <td style={{ ...tdStyle, whiteSpace: 'nowrap', color: C.g400 }}>{formatDate(item.resolutiondate)}</td>

@@ -40,10 +40,10 @@ export default function TimelineChart({
       <BarLineChart
         rows={data}
         bars={[
-          { key: 'created', color: C.orange },
-          { key: 'closed', color: C.success },
+          { key: 'created', color: C.orange, label: createdLabel },
+          { key: 'closed', color: C.success, label: closedLabel },
         ]}
-        line={showBacklog ? { key: 'backlog', color: C.ink } : null}
+        line={showBacklog ? { key: 'backlog', color: C.ink, label: backlogLabel } : null}
       />
     </ChartCard>
   );

@@ -27,8 +27,8 @@ export default function OpenByStatusChart({
     <ChartCard title={title} subtitle={subtitle} legend={<ChartLegend items={legendItems} />}>
       <BarLineChart
         rows={data}
-        bars={statuses.map((s) => ({ key: s, color: statusColor(s) }))}
-        line={{ key: 'backlog', color: C.ink }}
+        bars={statuses.map((s) => ({ key: s, color: statusColor(s), label: s }))}
+        line={{ key: 'backlog', color: C.ink, label: backlogLabel }}
         stacked
       />
     </ChartCard>
