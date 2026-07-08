@@ -150,49 +150,30 @@ function apStats(items: SubtaskRow[]) {
   return { done, pending, total: items.length, pct: items.length ? Math.round((done / items.length) * 100) : 0 };
 }
 
+// Clave de día en hora LOCAL (no UTC): toISOString() convierte a UTC, así que un issue creado
+// de madrugada en España (p.ej. 00:30 CEST = 22:30 UTC del día anterior) quedaría contado un
+// día antes de lo que muestran la tabla y formatDate (que sí usan la zona horaria local).
+function localDateKey(value: Date | string) {
+  const d = typeof value === 'string' ? new Date(value) : value;
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
 function eachDateKey(from: Date, to: Date) {
   const keys: string[] = [];
   const cursor = new Date(from);
-  cursor.setUTCHours(0, 0, 0, 0);
+  cursor.setHours(0, 0, 0, 0);
   const end = new Date(to);
-  end.setUTCHours(0, 0, 0, 0);
+  end.setHours(0, 0, 0, 0);
   while (cursor <= end) {
-    keys.push(cursor.toISOString().split('T')[0]);
-    cursor.setUTCDate(cursor.getUTCDate() + 1);
+    keys.push(localDateKey(cursor));
+    cursor.setDate(cursor.getDate() + 1);
   }
   return keys;
 }
 
-// Cuantos más días abarque el periodo, más se agrupan las barras (por semana/mes) para
-// que el gráfico no acabe con cientos de barras de 1px en "1 año".
-function bucketStep(days: number) {
-  return days <= 7 ? 1 : days <= 30 ? 3 : days <= 90 ? 7 : 30;
-}
-
-function chunkByStep<T extends { date: string; backlog: number }>(
-  rows: T[],
-  step: number,
-  mergeExtra: (chunk: T[]) => Omit<T, 'date' | 'backlog'>
-): T[] {
-  if (step <= 1) return rows;
-  const out: T[] = [];
-  for (let i = 0; i < rows.length; i += step) {
-    const chunk = rows.slice(i, i + step);
-    // Se etiqueta con el ÚLTIMO día del bucket (igual que el backlog, que ya es de fin de
-    // bucket): así la barra más reciente siempre queda fechada hoy en vez de "step-1" días
-    // antes, que hacía parecer que a la gráfica le faltaban las entradas más recientes.
-    out.push({
-      ...mergeExtra(chunk),
-      date: chunk[chunk.length - 1].date,
-      backlog: chunk[chunk.length - 1].backlog,
-    } as T);
-  }
-  return out;
-}
-
 function buildTimelineWithBacklog(items: Array<{ created?: string; resolutiondate?: string }>, days: number) {
   const pastDate = new Date(Date.now() - days * DAY);
-  const pastDateKey = pastDate.toISOString().split('T')[0];
+  const pastDateKey = localDateKey(pastDate);
 
   const dayMap = new Map<string, { created: number; resolved: number }>();
   let baselineBacklog = 0;
@@ -200,7 +181,7 @@ function buildTimelineWithBacklog(items: Array<{ created?: string; resolutiondat
   items.forEach((item) => {
     if (!item.created) return;
 
-    const createdKey = new Date(item.created).toISOString().split('T')[0];
+    const createdKey = localDateKey(item.created);
     if (createdKey < pastDateKey) {
       baselineBacklog++;
     } else {
@@ -210,7 +191,7 @@ function buildTimelineWithBacklog(items: Array<{ created?: string; resolutiondat
     }
 
     if (item.resolutiondate) {
-      const resolvedKey = new Date(item.resolutiondate).toISOString().split('T')[0];
+      const resolvedKey = localDateKey(item.resolutiondate);
       if (resolvedKey < pastDateKey) {
         baselineBacklog--;
       } else {
@@ -222,16 +203,11 @@ function buildTimelineWithBacklog(items: Array<{ created?: string; resolutiondat
   });
 
   let runningBacklog = baselineBacklog;
-  const dailyRows = eachDateKey(pastDate, new Date()).map((date) => {
+  return eachDateKey(pastDate, new Date()).map((date) => {
     const entry = dayMap.get(date) || { created: 0, resolved: 0 };
     runningBacklog += entry.created - entry.resolved;
     return { date, created: entry.created, closed: entry.resolved, backlog: runningBacklog };
   });
-
-  return chunkByStep(dailyRows, bucketStep(days), (chunk) => ({
-    created: chunk.reduce((sum, r) => sum + r.created, 0),
-    closed: chunk.reduce((sum, r) => sum + r.closed, 0),
-  }));
 }
 
 function buildOpenByStatusTimeline(
@@ -239,7 +215,7 @@ function buildOpenByStatusTimeline(
   days: number
 ) {
   const pastDate = new Date(Date.now() - days * DAY);
-  const pastDateKey = pastDate.toISOString().split('T')[0];
+  const pastDateKey = localDateKey(pastDate);
 
   // Backlog histórico real: creados - resueltos acumulados, igual que en buildTimelineWithBacklog.
   // No puede basarse solo en los items que siguen abiertos HOY, porque eso ignora los que
@@ -250,7 +226,7 @@ function buildOpenByStatusTimeline(
   items.forEach((item) => {
     if (!item.created) return;
 
-    const createdKey = new Date(item.created).toISOString().split('T')[0];
+    const createdKey = localDateKey(item.created);
     if (createdKey < pastDateKey) {
       baselineBacklog++;
     } else {
@@ -260,7 +236,7 @@ function buildOpenByStatusTimeline(
     }
 
     if (item.resolutiondate) {
-      const resolvedKey = new Date(item.resolutiondate).toISOString().split('T')[0];
+      const resolvedKey = localDateKey(item.resolutiondate);
       if (resolvedKey < pastDateKey) {
         baselineBacklog--;
       } else {
@@ -277,7 +253,7 @@ function buildOpenByStatusTimeline(
   const statusSet = new Set<string>();
 
   openItems.forEach((item) => {
-    const dateKey = new Date(item.created as string).toISOString().split('T')[0];
+    const dateKey = localDateKey(item.created as string);
     statusSet.add(item.status);
 
     if (dateKey >= pastDateKey) {
@@ -289,7 +265,7 @@ function buildOpenByStatusTimeline(
 
   const statuses = Array.from(statusSet);
   let runningBacklog = baselineBacklog;
-  const dailyRows = eachDateKey(pastDate, new Date()).map((date) => {
+  const rows = eachDateKey(pastDate, new Date()).map((date) => {
     const backlogEntry = backlogDayMap.get(date) || { created: 0, resolved: 0 };
     runningBacklog += backlogEntry.created - backlogEntry.resolved;
     const statusEntry = statusDayMap.get(date) || {};
@@ -298,14 +274,6 @@ function buildOpenByStatusTimeline(
       row[status] = statusEntry[status] || 0;
     });
     return row;
-  });
-
-  const rows = chunkByStep(dailyRows, bucketStep(days), (chunk) => {
-    const merged: Record<string, number> = {};
-    statuses.forEach((status) => {
-      merged[status] = chunk.reduce((sum, r) => sum + (Number(r[status]) || 0), 0);
-    });
-    return merged;
   });
 
   return { rows, statuses };
