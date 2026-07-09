@@ -95,20 +95,10 @@ interface DashboardIssueRow {
 }
 
 interface DashboardStats {
-  totalOpen: number;
-  totalClosed: number;
-  byState: Record<string, number>;
-  byPriority: Record<string, number>;
-  timeline: Array<{ date: string; created: number; closed: number }>;
   issues: DashboardIssueRow[];
 }
 
 const INITIAL_STATS: DashboardStats = {
-  totalOpen: 0,
-  totalClosed: 0,
-  byState: {},
-  byPriority: {},
-  timeline: [],
   issues: [],
 };
 
