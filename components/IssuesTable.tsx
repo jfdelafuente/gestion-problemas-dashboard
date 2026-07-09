@@ -229,6 +229,7 @@ export default function IssuesTable({
             <tr style={{ borderBottom: `2px solid ${C.g100}` }}>
               <th style={thStyle}>Clave</th>
               <th style={thStyle}>Resumen</th>
+              {showIncidentRef && <th style={thStyle}>EPSILON</th>}
               <th style={thStyle}>Estado</th>
               <th style={thStyle}>Prioridad</th>
               {showType && <th style={thStyle}>Tipo</th>}
@@ -238,7 +239,6 @@ export default function IssuesTable({
               <th style={thStyle}>Creado</th>
               <th style={thStyle}>Resuelto</th>
               {showWikiPage && <th style={thStyle}>Wiki Page</th>}
-              {showIncidentRef && <th style={thStyle}>Incidente</th>}
             </tr>
           </thead>
           <tbody>
@@ -253,6 +253,22 @@ export default function IssuesTable({
                       <KeyLink jiraKey={issue.key} />
                     </td>
                     <td style={{ ...tdStyle, minWidth: 260, color: C.ink, fontWeight: 500 }}>{issue.summary}</td>
+                    {showIncidentRef && (
+                      <td style={{ ...tdStyle, whiteSpace: 'nowrap' }}>
+                        {issue.incidentRef ? (
+                          <a
+                            href={incidentUrl(issue.incidentRef)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            style={{ fontFamily: 'var(--font-mono)', fontSize: 12.5, fontWeight: 700, color: C.orange, textDecoration: 'none' }}
+                          >
+                            {issue.incidentRef}
+                          </a>
+                        ) : (
+                          <span style={{ color: C.g300 }}>—</span>
+                        )}
+                      </td>
+                    )}
                     <td style={tdStyle}>
                       <StatusChip status={issue.status} />
                     </td>
@@ -326,22 +342,6 @@ export default function IssuesTable({
                               <path d="M10 14 21 3" />
                             </svg>
                             Ver
-                          </a>
-                        ) : (
-                          <span style={{ color: C.g300 }}>—</span>
-                        )}
-                      </td>
-                    )}
-                    {showIncidentRef && (
-                      <td style={{ ...tdStyle, whiteSpace: 'nowrap' }}>
-                        {issue.incidentRef ? (
-                          <a
-                            href={incidentUrl(issue.incidentRef)}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            style={{ fontFamily: 'var(--font-mono)', fontSize: 12.5, fontWeight: 700, color: C.orange, textDecoration: 'none' }}
-                          >
-                            {issue.incidentRef}
                           </a>
                         ) : (
                           <span style={{ color: C.g300 }}>—</span>
