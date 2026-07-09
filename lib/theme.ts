@@ -80,6 +80,10 @@ export function issueUrl(key: string) {
   return `https://${process.env.NEXT_PUBLIC_JIRA_DOMAIN}/browse/${key}`;
 }
 
+export function incidentUrl(incidentRef: string) {
+  return `https://soptmc.si.orange.es/MonTMC/epsilon/remedyC/${incidentRef}`;
+}
+
 export function formatDate(value?: string) {
   if (!value) return '—';
   return new Date(value).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' });

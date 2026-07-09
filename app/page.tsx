@@ -91,6 +91,7 @@ interface DashboardIssueRow {
   subtasksDone: number;
   subtasks: SubtaskRow[];
   wikiPage?: { url: string; title: string };
+  incidentRef?: string;
 }
 
 interface DashboardStats {
@@ -679,6 +680,7 @@ export default function Home() {
               subtasksLabel="PM Tasks"
               showFilters
               showWikiPage
+              showIncidentRef
             />
           </>
         ) : activeTab === 'pmtasks' ? (

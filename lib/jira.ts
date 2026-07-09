@@ -75,6 +75,7 @@ export interface DashboardIssueRow {
   subtasksDone: number;
   subtasks: SubtaskRow[];
   wikiPage?: WikiPageLink;
+  incidentRef?: string;
 }
 
 export interface DashboardStats {
@@ -99,6 +100,43 @@ const SEARCH_FIELDS = [
   'customfield_11907', // Grupo/s Resolutor/es
   'subtasks',
 ].join(',');
+
+// Los postmortems referencian a veces un incidente de Remedy/ServiceNow como
+// texto suelto dentro de la Descripción (no es un campo de Jira independiente),
+// con un formato variable de dígitos: INC000004068764, INC000004030052, etc.
+function extractIncidentRef(description?: string): string | undefined {
+  return description?.match(/INC\d{6,}/)?.[0];
+}
+
+// La Descripción pesa bastante (varios KB por issue) y solo hace falta para
+// extraer el incidente en los Postmortems, así que se pide aparte —vía
+// key in (...), igual que getSubtaskExtraFields— en vez de en SEARCH_FIELDS,
+// donde se pediría (y pagaría en bytes) para los ~1650 issues del proyecto.
+async function getPostmortemIncidentRefs(keys: string[]): Promise<Map<string, string>> {
+  const refsByKey = new Map<string, string>();
+  const chunkSize = 150;
+
+  for (let i = 0; i < keys.length; i += chunkSize) {
+    const chunk = keys.slice(i, i + chunkSize);
+    try {
+      const response = await jiraClient.get('/search', {
+        params: {
+          jql: `key in (${chunk.join(',')})`,
+          maxResults: chunkSize,
+          fields: 'description',
+        },
+      });
+      response.data.issues.forEach((issue: { key: string; fields?: { description?: string } }) => {
+        const ref = extractIncidentRef(issue.fields?.description);
+        if (ref) refsByKey.set(issue.key, ref);
+      });
+    } catch (error) {
+      console.error('Error fetching postmortem descriptions from Jira:', error);
+    }
+  }
+
+  return refsByKey;
+}
 
 export interface SubtaskExtraFields {
   actionPointType?: string;
@@ -245,6 +283,7 @@ export async function getDashboardStats(days: number = 30): Promise<DashboardSta
 
   const postmortemKeys = issues.filter((issue) => issue.fields.issuetype.name === 'Postmortem').map((issue) => issue.key);
   const wikiPageLinks = await getWikiPageLinks(postmortemKeys);
+  const incidentRefs = await getPostmortemIncidentRefs(postmortemKeys);
 
   const now = new Date();
   const pastDate = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
@@ -304,6 +343,7 @@ export async function getDashboardStats(days: number = 30): Promise<DashboardSta
       type: issue.fields.issuetype.name,
       created: issue.fields.created,
       resolutiondate: issue.fields.resolutiondate,
+      incidentRef: incidentRefs.get(issue.key),
       assignedGroup: issue.fields.customfield_10724?.name || '-',
       involvedGroups: issue.fields.customfield_14100?.map((g) => g.name).join(', ') || '-',
       resolvingGroups: issue.fields.customfield_11907?.map((g) => g.name).join(', ') || '-',

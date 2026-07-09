@@ -1,7 +1,7 @@
 'use client';
 
 import { Fragment, useMemo, useState } from 'react';
-import { C, formatDate } from '@/lib/theme';
+import { C, formatDate, incidentUrl } from '@/lib/theme';
 import { StatusChip, PriorityPill, KeyLink, GroupTags } from '@/components/ui/Chips';
 
 function splitGroups(value: string) {
@@ -37,6 +37,7 @@ interface IssueRow {
   subtasksDone: number;
   subtasks: SubtaskRow[];
   wikiPage?: { url: string; title: string };
+  incidentRef?: string;
 }
 
 interface IssuesTableProps {
@@ -52,6 +53,7 @@ interface IssuesTableProps {
   showSubtaskInvolvedGroup?: boolean;
   showFilters?: boolean;
   showWikiPage?: boolean;
+  showIncidentRef?: boolean;
 }
 
 const ALL = '__all__';
@@ -102,12 +104,14 @@ export default function IssuesTable({
   showSubtaskInvolvedGroup = false,
   showFilters = false,
   showWikiPage = false,
+  showIncidentRef = false,
 }: IssuesTableProps) {
   const showSecondGroupColumn = secondGroupColumn !== 'none';
   const columnCount =
     (showType ? 9 : 8) +
     (showSubtasks ? 1 : 0) +
-    (showWikiPage ? 1 : 0) -
+    (showWikiPage ? 1 : 0) +
+    (showIncidentRef ? 1 : 0) -
     (showSecondGroupColumn ? 0 : 1) -
     (showAssignedGroup ? 0 : 1);
   const secondGroupLabel = secondGroupColumn === 'resolving' ? 'Grupo/s Resolutor/es' : 'Grupo Involucrado';
@@ -234,6 +238,7 @@ export default function IssuesTable({
               <th style={thStyle}>Creado</th>
               <th style={thStyle}>Resuelto</th>
               {showWikiPage && <th style={thStyle}>Wiki Page</th>}
+              {showIncidentRef && <th style={thStyle}>Incidente</th>}
             </tr>
           </thead>
           <tbody>
@@ -321,6 +326,22 @@ export default function IssuesTable({
                               <path d="M10 14 21 3" />
                             </svg>
                             Ver
+                          </a>
+                        ) : (
+                          <span style={{ color: C.g300 }}>—</span>
+                        )}
+                      </td>
+                    )}
+                    {showIncidentRef && (
+                      <td style={{ ...tdStyle, whiteSpace: 'nowrap' }}>
+                        {issue.incidentRef ? (
+                          <a
+                            href={incidentUrl(issue.incidentRef)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            style={{ fontFamily: 'var(--font-mono)', fontSize: 12.5, fontWeight: 700, color: C.orange, textDecoration: 'none' }}
+                          >
+                            {issue.incidentRef}
                           </a>
                         ) : (
                           <span style={{ color: C.g300 }}>—</span>
