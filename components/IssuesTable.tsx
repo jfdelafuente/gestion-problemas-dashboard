@@ -36,6 +36,7 @@ interface IssueRow {
   subtasksTotal: number;
   subtasksDone: number;
   subtasks: SubtaskRow[];
+  wikiPage?: { url: string; title: string };
 }
 
 interface IssuesTableProps {
@@ -50,6 +51,7 @@ interface IssuesTableProps {
   showActionPointType?: boolean;
   showSubtaskInvolvedGroup?: boolean;
   showFilters?: boolean;
+  showWikiPage?: boolean;
 }
 
 const ALL = '__all__';
@@ -99,10 +101,15 @@ export default function IssuesTable({
   showActionPointType = false,
   showSubtaskInvolvedGroup = false,
   showFilters = false,
+  showWikiPage = false,
 }: IssuesTableProps) {
   const showSecondGroupColumn = secondGroupColumn !== 'none';
   const columnCount =
-    (showType ? 9 : 8) + (showSubtasks ? 1 : 0) - (showSecondGroupColumn ? 0 : 1) - (showAssignedGroup ? 0 : 1);
+    (showType ? 9 : 8) +
+    (showSubtasks ? 1 : 0) +
+    (showWikiPage ? 1 : 0) -
+    (showSecondGroupColumn ? 0 : 1) -
+    (showAssignedGroup ? 0 : 1);
   const secondGroupLabel = secondGroupColumn === 'resolving' ? 'Grupo/s Resolutor/es' : 'Grupo Involucrado';
   const [expandedKeys, setExpandedKeys] = useState<Set<string>>(new Set());
 
@@ -226,6 +233,7 @@ export default function IssuesTable({
               {showSubtasks && <th style={thStyle}>{subtasksLabel}</th>}
               <th style={thStyle}>Creado</th>
               <th style={thStyle}>Resuelto</th>
+              {showWikiPage && <th style={thStyle}>Wiki Page</th>}
             </tr>
           </thead>
           <tbody>
@@ -297,6 +305,28 @@ export default function IssuesTable({
                     )}
                     <td style={{ ...tdStyle, whiteSpace: 'nowrap', color: C.g400 }}>{formatDate(issue.created)}</td>
                     <td style={{ ...tdStyle, whiteSpace: 'nowrap', color: C.g400 }}>{formatDate(issue.resolutiondate)}</td>
+                    {showWikiPage && (
+                      <td style={{ ...tdStyle, whiteSpace: 'nowrap' }}>
+                        {issue.wikiPage ? (
+                          <a
+                            href={issue.wikiPage.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            title={issue.wikiPage.title}
+                            style={{ display: 'inline-flex', alignItems: 'center', gap: 5, color: C.orange, fontWeight: 600, textDecoration: 'none' }}
+                          >
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+                              <path d="M15 3h6v6" />
+                              <path d="M10 14 21 3" />
+                            </svg>
+                            Ver
+                          </a>
+                        ) : (
+                          <span style={{ color: C.g300 }}>—</span>
+                        )}
+                      </td>
+                    )}
                   </tr>
                   {canExpand && isExpanded && (
                     <tr>

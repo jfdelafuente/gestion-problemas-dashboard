@@ -55,6 +55,11 @@ export interface SubtaskRow {
   involvedGroups?: string[];
 }
 
+export interface WikiPageLink {
+  url: string;
+  title: string;
+}
+
 export interface DashboardIssueRow {
   key: string;
   summary: string;
@@ -69,6 +74,7 @@ export interface DashboardIssueRow {
   subtasksTotal: number;
   subtasksDone: number;
   subtasks: SubtaskRow[];
+  wikiPage?: WikiPageLink;
 }
 
 export interface DashboardStats {
@@ -146,6 +152,61 @@ async function getSubtaskExtraFields(keys: string[]): Promise<Map<string, Subtas
   return extrasByKey;
 }
 
+interface RemoteLink {
+  relationship?: string;
+  application?: { type?: string };
+  object: { url: string; title: string };
+}
+
+// Una vez que un postmortem tiene su Wiki Page enlazada en Jira, ese enlace no
+// cambia: se cachea en memoria del proceso (vive mientras viva el proceso de
+// pm2) para no volver a pedirlo en cada carga del dashboard. Los postmortems
+// que TODAVÍA no tienen enlace no se cachean como "sin enlace" — son pocos, y
+// así seguimos comprobándolos por si se añade el enlace más adelante.
+const wikiPageCache = new Map<string, WikiPageLink>();
+
+// La "Wiki Page" de un postmortem no es un campo de Jira: es un remote link a
+// Confluence (relationship "Wiki Page"), y solo se puede pedir issue por issue
+// vía /issue/{key}/remotelink, no en el /search masivo. Se piden en tandas para
+// no lanzar cientos de peticiones a la vez.
+async function getWikiPageLinks(keys: string[]): Promise<Map<string, WikiPageLink>> {
+  const linksByKey = new Map<string, WikiPageLink>();
+  const keysToFetch: string[] = [];
+
+  keys.forEach((key) => {
+    const cached = wikiPageCache.get(key);
+    if (cached) {
+      linksByKey.set(key, cached);
+    } else {
+      keysToFetch.push(key);
+    }
+  });
+
+  const concurrency = 15;
+  for (let i = 0; i < keysToFetch.length; i += concurrency) {
+    const chunk = keysToFetch.slice(i, i + concurrency);
+    await Promise.all(
+      chunk.map(async (key) => {
+        try {
+          const response = await jiraClient.get<RemoteLink[]>(`/issue/${key}/remotelink`);
+          const wikiLink = response.data.find(
+            (link) => link.relationship === 'Wiki Page' || link.application?.type === 'com.atlassian.confluence'
+          );
+          if (wikiLink) {
+            const link = { url: wikiLink.object.url, title: wikiLink.object.title };
+            linksByKey.set(key, link);
+            wikiPageCache.set(key, link);
+          }
+        } catch (error) {
+          console.error(`Error fetching remote links for ${key}:`, error);
+        }
+      })
+    );
+  }
+
+  return linksByKey;
+}
+
 export async function getIssuesByProject(): Promise<JiraIssue[]> {
   const jql = `project = ${PROJECT_KEY} AND "AP Área" = "+O IT"`;
   const pageSize = 100;
@@ -181,6 +242,9 @@ export async function getDashboardStats(days: number = 30): Promise<DashboardSta
 
   const subtaskKeys = issues.flatMap((issue) => issue.fields.subtasks?.map((s) => s.key) || []);
   const subtaskExtras = await getSubtaskExtraFields(subtaskKeys);
+
+  const postmortemKeys = issues.filter((issue) => issue.fields.issuetype.name === 'Postmortem').map((issue) => issue.key);
+  const wikiPageLinks = await getWikiPageLinks(postmortemKeys);
 
   const now = new Date();
   const pastDate = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
@@ -257,6 +321,7 @@ export async function getDashboardStats(days: number = 30): Promise<DashboardSta
         created: subtaskExtras.get(s.key)?.created,
         resolutiondate: subtaskExtras.get(s.key)?.resolutiondate,
       })),
+      wikiPage: wikiPageLinks.get(issue.key),
     }))
     .sort((a, b) => b.created.localeCompare(a.created));
 
