@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import DashboardHeader, { Tab } from '@/components/DashboardHeader';
-import KpiCard, { computeDelta } from '@/components/KpiCard';
+import KpiCard, { computeDelta, KpiDelta } from '@/components/KpiCard';
 import StateAndPriorityChart from '@/components/StateAndPriorityChart';
 import TimelineChart from '@/components/TimelineChart';
 import OpenByStatusChart from '@/components/OpenByStatusChart';
@@ -10,8 +10,16 @@ import GroupByStatusChart from '@/components/GroupByStatusChart';
 import IssuesTable from '@/components/IssuesTable';
 import ActionPointsTable from '@/components/ActionPointsTable';
 import { C, formatDate } from '@/lib/theme';
-
-const DAY = 24 * 60 * 60 * 1000;
+import {
+  buildStatsFromIssues,
+  apStats,
+  buildTimelineWithBacklog,
+  buildOpenByStatusTimeline,
+  buildGroupByStatus,
+  byCreatedRange,
+  computePeriod,
+  DashboardIssueRow,
+} from '@/lib/dashboardStats';
 
 // La vista General tiene 2 entidades raíz (Postmortem, Problema) y 2 subtareas de Jira que
 // cuelgan de ellas (PM Task de Postmortem, Action Point de Problema). El módulo refleja esa
@@ -63,273 +71,81 @@ function KpiModule({
   );
 }
 
-interface SubtaskRow {
-  key: string;
-  summary: string;
-  status: string;
-  priority: string;
-  done: boolean;
-  actionPointType?: string;
-  assignedGroup?: string;
-  involvedGroups?: string[];
-  created?: string;
-  resolutiondate?: string;
-}
-
-interface DashboardIssueRow {
-  key: string;
-  summary: string;
-  status: string;
-  priority: string;
-  type: string;
-  created: string;
-  resolutiondate?: string;
-  assignedGroup: string;
-  involvedGroups: string;
-  resolvingGroups: string;
-  subtasksTotal: number;
-  subtasksDone: number;
-  subtasks: SubtaskRow[];
-  wikiPage?: { url: string; title: string };
-  incidentRef?: string;
-}
-
 interface DashboardStats {
-  totalOpen: number;
-  totalClosed: number;
-  byState: Record<string, number>;
-  byPriority: Record<string, number>;
-  timeline: Array<{ date: string; created: number; closed: number }>;
   issues: DashboardIssueRow[];
 }
 
 const INITIAL_STATS: DashboardStats = {
-  totalOpen: 0,
-  totalClosed: 0,
-  byState: {},
-  byPriority: {},
-  timeline: [],
   issues: [],
 };
 
-function buildStatsFromIssues(issues: DashboardIssueRow[]) {
-  const byState: Record<string, number> = {};
-  const byPriority: Record<string, number> = {};
-  let totalOpen = 0;
-  let totalClosed = 0;
-  let resolvedCount = 0;
-  let resolvedDaysSum = 0;
 
-  issues.forEach((issue) => {
-    byState[issue.status] = (byState[issue.status] || 0) + 1;
-    byPriority[issue.priority] = (byPriority[issue.priority] || 0) + 1;
-
-    if (issue.resolutiondate) {
-      totalClosed++;
-      const days = (new Date(issue.resolutiondate).getTime() - new Date(issue.created).getTime()) / DAY;
-      resolvedDaysSum += days;
-      resolvedCount++;
-    } else {
-      totalOpen++;
-    }
-  });
-
-  return {
-    byState,
-    byPriority,
-    totalOpen,
-    totalClosed,
-    avgResolutionDays: resolvedCount > 0 ? resolvedDaysSum / resolvedCount : 0,
-  };
+interface KpiCardSpec {
+  label: string;
+  value: string | number;
+  tone: string;
+  sub: string;
+  delta: KpiDelta | null;
 }
 
-function apStats(items: SubtaskRow[]) {
-  let done = 0;
-  items.forEach((t) => {
-    if (t.done) done++;
-  });
-  const pending = items.length - done;
-  return { done, pending, total: items.length, pct: items.length ? Math.round((done / items.length) * 100) : 0 };
+// Fila de tarjetas KPI a partir de sus specs: un único punto que reparte `compact` a las 4,
+// en vez de repetirlo tarjeta por tarjeta en cada sitio donde se usa.
+function KpiCardRow({ cards, compact }: { cards: KpiCardSpec[]; compact?: boolean }) {
+  return (
+    <>
+      {cards.map((card) => (
+        <KpiCard key={card.label} compact={compact} {...card} />
+      ))}
+    </>
+  );
 }
 
-// Clave de día en hora LOCAL (no UTC): toISOString() convierte a UTC, así que un issue creado
-// de madrugada en España (p.ej. 00:30 CEST = 22:30 UTC del día anterior) quedaría contado un
-// día antes de lo que muestran la tabla y formatDate (que sí usan la zona horaria local).
-function localDateKey(value: Date | string) {
-  const d = typeof value === 'string' ? new Date(value) : value;
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+// Postmortem y Problema muestran exactamente las mismas 4 KPIs (Total/Abiertos/Cerrados/
+// Resolución media) — solo cambia el nombre de la entidad. Antes este bloque estaba
+// duplicado por cada entidad Y por cada sitio donde se usa (pestaña General + pestaña propia).
+function entityKpiCards(
+  entityLabel: string,
+  total: number,
+  prevTotal: number,
+  stats: ReturnType<typeof buildStatsFromIssues>,
+  prevStats: ReturnType<typeof buildStatsFromIssues>
+): KpiCardSpec[] {
+  return [
+    { label: `Total ${entityLabel}`, value: total, tone: C.orange, sub: 'Abiertos en el periodo', delta: computeDelta(total, prevTotal, 'down') },
+    { label: 'Abiertos', value: stats.totalOpen, tone: C.danger, sub: 'En curso o sin iniciar', delta: computeDelta(stats.totalOpen, prevStats.totalOpen, 'down') },
+    { label: 'Cerrados', value: stats.totalClosed, tone: C.success, sub: 'Con resolución registrada', delta: computeDelta(stats.totalClosed, prevStats.totalClosed, 'up') },
+    {
+      label: 'Resolución media',
+      value: `${Math.round(stats.avgResolutionDays * 10) / 10}d`,
+      tone: C.g600,
+      sub: 'Tiempo medio de cierre',
+      delta: computeDelta(stats.avgResolutionDays, prevStats.avgResolutionDays, 'down', { absolute: true, unit: 'd' }),
+    },
+  ];
 }
 
-function eachDateKey(from: Date, to: Date) {
-  const keys: string[] = [];
-  const cursor = new Date(from);
-  cursor.setHours(0, 0, 0, 0);
-  const end = new Date(to);
-  end.setHours(0, 0, 0, 0);
-  while (cursor <= end) {
-    keys.push(localDateKey(cursor));
-    cursor.setDate(cursor.getDate() + 1);
-  }
-  return keys;
+// PM Tasks y Action Points muestran las mismas 4 KPIs (Total/Pendientes/Completado-s/%
+// Completado); solo cambian las etiquetas por concordancia de género ("cerradas" vs
+// "cerrados"), así que se pasan como opciones en vez de tener una función por entidad.
+function subtaskKpiCards(opts: {
+  totalLabel: string;
+  totalSub: string;
+  doneLabel: string;
+  doneSub: string;
+  pendingSub: string;
+  pctSub: string;
+  stats: ReturnType<typeof apStats>;
+  prevStats: ReturnType<typeof apStats>;
+}): KpiCardSpec[] {
+  const { totalLabel, totalSub, doneLabel, doneSub, pendingSub, pctSub, stats, prevStats } = opts;
+  return [
+    { label: totalLabel, value: stats.total, tone: C.orange, sub: totalSub, delta: computeDelta(stats.total, prevStats.total, 'down') },
+    { label: 'Pendientes', value: stats.pending, tone: C.danger, sub: pendingSub, delta: computeDelta(stats.pending, prevStats.pending, 'down') },
+    { label: doneLabel, value: stats.done, tone: C.success, sub: doneSub, delta: computeDelta(stats.done, prevStats.done, 'up') },
+    { label: '% Completado', value: `${stats.pct}%`, tone: C.g600, sub: pctSub, delta: computeDelta(stats.pct, prevStats.pct, 'up') },
+  ];
 }
 
-function buildTimelineWithBacklog(items: Array<{ created?: string; resolutiondate?: string }>, days: number) {
-  const pastDate = new Date(Date.now() - days * DAY);
-  const pastDateKey = localDateKey(pastDate);
-
-  const dayMap = new Map<string, { created: number; resolved: number }>();
-  let baselineBacklog = 0;
-
-  items.forEach((item) => {
-    if (!item.created) return;
-
-    const createdKey = localDateKey(item.created);
-    if (createdKey < pastDateKey) {
-      baselineBacklog++;
-    } else {
-      const entry = dayMap.get(createdKey) || { created: 0, resolved: 0 };
-      entry.created++;
-      dayMap.set(createdKey, entry);
-    }
-
-    if (item.resolutiondate) {
-      const resolvedKey = localDateKey(item.resolutiondate);
-      if (resolvedKey < pastDateKey) {
-        baselineBacklog--;
-      } else {
-        const entry = dayMap.get(resolvedKey) || { created: 0, resolved: 0 };
-        entry.resolved++;
-        dayMap.set(resolvedKey, entry);
-      }
-    }
-  });
-
-  let runningBacklog = baselineBacklog;
-  return eachDateKey(pastDate, new Date()).map((date) => {
-    const entry = dayMap.get(date) || { created: 0, resolved: 0 };
-    runningBacklog += entry.created - entry.resolved;
-    return { date, created: entry.created, closed: entry.resolved, backlog: runningBacklog };
-  });
-}
-
-function buildOpenByStatusTimeline(
-  items: Array<{ created?: string; resolutiondate?: string; status: string; done: boolean }>,
-  days: number
-) {
-  const pastDate = new Date(Date.now() - days * DAY);
-  const pastDateKey = localDateKey(pastDate);
-
-  // Backlog histórico real: creados - resueltos acumulados, igual que en buildTimelineWithBacklog.
-  // No puede basarse solo en los items que siguen abiertos HOY, porque eso ignora los que
-  // estuvieron en backlog en el pasado y ya se resolvieron desde entonces.
-  const backlogDayMap = new Map<string, { created: number; resolved: number }>();
-  let baselineBacklog = 0;
-
-  items.forEach((item) => {
-    if (!item.created) return;
-
-    const createdKey = localDateKey(item.created);
-    if (createdKey < pastDateKey) {
-      baselineBacklog++;
-    } else {
-      const entry = backlogDayMap.get(createdKey) || { created: 0, resolved: 0 };
-      entry.created++;
-      backlogDayMap.set(createdKey, entry);
-    }
-
-    if (item.resolutiondate) {
-      const resolvedKey = localDateKey(item.resolutiondate);
-      if (resolvedKey < pastDateKey) {
-        baselineBacklog--;
-      } else {
-        const entry = backlogDayMap.get(resolvedKey) || { created: 0, resolved: 0 };
-        entry.resolved++;
-        backlogDayMap.set(resolvedKey, entry);
-      }
-    }
-  });
-
-  // Barras: solo los items que siguen abiertos hoy, agrupados por su fecha de creación y estado actual.
-  const openItems = items.filter((item) => !item.done && item.created);
-  const statusDayMap = new Map<string, Record<string, number>>();
-  const statusSet = new Set<string>();
-
-  openItems.forEach((item) => {
-    const dateKey = localDateKey(item.created as string);
-    statusSet.add(item.status);
-
-    if (dateKey >= pastDateKey) {
-      const entry = statusDayMap.get(dateKey) || {};
-      entry[item.status] = (entry[item.status] || 0) + 1;
-      statusDayMap.set(dateKey, entry);
-    }
-  });
-
-  const statuses = Array.from(statusSet);
-  let runningBacklog = baselineBacklog;
-  const rows = eachDateKey(pastDate, new Date()).map((date) => {
-    const backlogEntry = backlogDayMap.get(date) || { created: 0, resolved: 0 };
-    runningBacklog += backlogEntry.created - backlogEntry.resolved;
-    const statusEntry = statusDayMap.get(date) || {};
-    const row: Record<string, string | number> & { date: string; backlog: number } = { date, backlog: runningBacklog };
-    statuses.forEach((status) => {
-      row[status] = statusEntry[status] || 0;
-    });
-    return row;
-  });
-
-  return { rows, statuses };
-}
-
-function buildGroupByStatus(items: Array<{ status: string; groups: string[] }>) {
-  const groupMap = new Map<string, Record<string, number>>();
-  const statusSet = new Set<string>();
-
-  items.forEach((item) => {
-    statusSet.add(item.status);
-    const groups = item.groups.length > 0 ? item.groups : ['Sin asignar'];
-    groups.forEach((group) => {
-      const entry = groupMap.get(group) || {};
-      entry[item.status] = (entry[item.status] || 0) + 1;
-      groupMap.set(group, entry);
-    });
-  });
-
-  const statuses = Array.from(statusSet);
-  const rows = Array.from(groupMap.entries())
-    .map(([group, entry]) => {
-      const total = Object.values(entry).reduce((sum, v) => sum + v, 0);
-      const row: Record<string, string | number> = { group, total };
-      statuses.forEach((status) => {
-        row[status] = entry[status] || 0;
-      });
-      return row;
-    })
-    .sort((a, b) => (b.total as number) - (a.total as number));
-
-  return { rows, statuses };
-}
-
-function byCreatedRange(issues: DashboardIssueRow[], start: Date, end: Date, type?: string) {
-  return issues.filter((issue) => {
-    if (type && issue.type !== type) return false;
-    const c = new Date(issue.created);
-    return c >= start && c < end;
-  });
-}
-
-function computePeriod(days: number) {
-  const nowTs = Date.now();
-  const periodStart = new Date(nowTs - days * DAY);
-  const prevPeriodStart = new Date(nowTs - 2 * days * DAY);
-  const periodEnd = new Date(nowTs + DAY);
-  return {
-    periodStart,
-    prevPeriodStart,
-    periodEnd,
-    rangeLabel: `${formatDate(periodStart.toISOString())} — ${formatDate(new Date(nowTs).toISOString())}`,
-  };
-}
 
 export default function Home() {
   const [stats, setStats] = useState<DashboardStats>(INITIAL_STATS);
@@ -368,7 +184,7 @@ export default function Home() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedDays]);
 
-  const { periodStart, prevPeriodStart, periodEnd, rangeLabel } = useMemo(() => computePeriod(selectedDays), [selectedDays]);
+  const { periodStart, prevPeriodStart, periodEnd, rangeLabel } = useMemo(() => computePeriod(selectedDays, formatDate), [selectedDays]);
 
   // ---------- Postmortem ----------
   const postmortemIssues = useMemo(() => byCreatedRange(stats.issues, periodStart, periodEnd, 'Postmortem'), [stats.issues, periodStart, periodEnd]);
@@ -486,71 +302,23 @@ export default function Home() {
                 note: 'Tareas de estos postmortems',
                 accent: C.warning,
                 children: (
-                  <>
-                    <KpiCard
-                      compact
-                      label="Total PM Tasks"
-                      value={pmCurrentStats.total}
-                      tone={C.orange}
-                      sub="Derivadas de postmortems del periodo"
-                      delta={computeDelta(pmCurrentStats.total, pmPrevStats.total, 'down')}
-                    />
-                    <KpiCard
-                      compact
-                      label="Pendientes"
-                      value={pmCurrentStats.pending}
-                      tone={C.danger}
-                      sub="Aún no cerradas"
-                      delta={computeDelta(pmCurrentStats.pending, pmPrevStats.pending, 'down')}
-                    />
-                    <KpiCard
-                      compact
-                      label="Completadas"
-                      value={pmCurrentStats.done}
-                      tone={C.success}
-                      sub="Cerradas o resueltas"
-                      delta={computeDelta(pmCurrentStats.done, pmPrevStats.done, 'up')}
-                    />
-                    <KpiCard
-                      compact
-                      label="% Completado"
-                      value={`${pmCurrentStats.pct}%`}
-                      tone={C.g600}
-                      sub="Sobre el total del periodo"
-                      delta={computeDelta(pmCurrentStats.pct, pmPrevStats.pct, 'up')}
-                    />
-                  </>
+                  <KpiCardRow
+                    compact
+                    cards={subtaskKpiCards({
+                      totalLabel: 'Total PM Tasks',
+                      totalSub: 'Derivadas de postmortems del periodo',
+                      doneLabel: 'Completadas',
+                      doneSub: 'Cerradas o resueltas',
+                      pendingSub: 'Aún no cerradas',
+                      pctSub: 'Sobre el total del periodo',
+                      stats: pmCurrentStats,
+                      prevStats: pmPrevStats,
+                    })}
+                  />
                 ),
               }}
             >
-              <KpiCard
-                label="Total Postmortems"
-                value={postmortemIssues.length}
-                tone={C.orange}
-                sub="Abiertos en el periodo"
-                delta={computeDelta(postmortemIssues.length, postmortemPrevIssues.length, 'down')}
-              />
-              <KpiCard
-                label="Abiertos"
-                value={postmortemStats.totalOpen}
-                tone={C.danger}
-                sub="En curso o sin iniciar"
-                delta={computeDelta(postmortemStats.totalOpen, postmortemPrevStats.totalOpen, 'down')}
-              />
-              <KpiCard
-                label="Cerrados"
-                value={postmortemStats.totalClosed}
-                tone={C.success}
-                sub="Con resolución registrada"
-                delta={computeDelta(postmortemStats.totalClosed, postmortemPrevStats.totalClosed, 'up')}
-              />
-              <KpiCard
-                label="Resolución media"
-                value={`${Math.round(postmortemStats.avgResolutionDays * 10) / 10}d`}
-                tone={C.g600}
-                sub="Tiempo medio de cierre"
-                delta={computeDelta(postmortemStats.avgResolutionDays, postmortemPrevStats.avgResolutionDays, 'down', { absolute: true, unit: 'd' })}
-              />
+              <KpiCardRow cards={entityKpiCards('Postmortems', postmortemIssues.length, postmortemPrevIssues.length, postmortemStats, postmortemPrevStats)} />
             </KpiModule>
 
             <KpiModule
@@ -561,104 +329,29 @@ export default function Home() {
                 note: 'Puntos de acción de estos problemas',
                 accent: C.g700,
                 children: (
-                  <>
-                    <KpiCard
-                      compact
-                      label="Total Puntos de Acción"
-                      value={apCurrentStats.total}
-                      tone={C.orange}
-                      sub="Derivados de problemas del periodo"
-                      delta={computeDelta(apCurrentStats.total, apPrevStats.total, 'down')}
-                    />
-                    <KpiCard
-                      compact
-                      label="Pendientes"
-                      value={apCurrentStats.pending}
-                      tone={C.danger}
-                      sub="Aún no cerrados"
-                      delta={computeDelta(apCurrentStats.pending, apPrevStats.pending, 'down')}
-                    />
-                    <KpiCard
-                      compact
-                      label="Completados"
-                      value={apCurrentStats.done}
-                      tone={C.success}
-                      sub="Cerrados o resueltos"
-                      delta={computeDelta(apCurrentStats.done, apPrevStats.done, 'up')}
-                    />
-                    <KpiCard
-                      compact
-                      label="% Completado"
-                      value={`${apCurrentStats.pct}%`}
-                      tone={C.g600}
-                      sub="Sobre el total del periodo"
-                      delta={computeDelta(apCurrentStats.pct, apPrevStats.pct, 'up')}
-                    />
-                  </>
+                  <KpiCardRow
+                    compact
+                    cards={subtaskKpiCards({
+                      totalLabel: 'Total Puntos de Acción',
+                      totalSub: 'Derivados de problemas del periodo',
+                      doneLabel: 'Completados',
+                      doneSub: 'Cerrados o resueltos',
+                      pendingSub: 'Aún no cerrados',
+                      pctSub: 'Sobre el total del periodo',
+                      stats: apCurrentStats,
+                      prevStats: apPrevStats,
+                    })}
+                  />
                 ),
               }}
             >
-              <KpiCard
-                label="Total Problemas"
-                value={problemaIssues.length}
-                tone={C.orange}
-                sub="Abiertos en el periodo"
-                delta={computeDelta(problemaIssues.length, problemaPrevIssues.length, 'down')}
-              />
-              <KpiCard
-                label="Abiertos"
-                value={problemaStats.totalOpen}
-                tone={C.danger}
-                sub="En curso o sin iniciar"
-                delta={computeDelta(problemaStats.totalOpen, problemaPrevStats.totalOpen, 'down')}
-              />
-              <KpiCard
-                label="Cerrados"
-                value={problemaStats.totalClosed}
-                tone={C.success}
-                sub="Con resolución registrada"
-                delta={computeDelta(problemaStats.totalClosed, problemaPrevStats.totalClosed, 'up')}
-              />
-              <KpiCard
-                label="Resolución media"
-                value={`${Math.round(problemaStats.avgResolutionDays * 10) / 10}d`}
-                tone={C.g600}
-                sub="Tiempo medio de cierre"
-                delta={computeDelta(problemaStats.avgResolutionDays, problemaPrevStats.avgResolutionDays, 'down', { absolute: true, unit: 'd' })}
-              />
+              <KpiCardRow cards={entityKpiCards('Problemas', problemaIssues.length, problemaPrevIssues.length, problemaStats, problemaPrevStats)} />
             </KpiModule>
           </>
         ) : activeTab === 'postmortem' ? (
           <>
             <div className="mo-anim" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(210px,1fr))', gap: 16, marginBottom: 24 }}>
-              <KpiCard
-                label="Total Postmortems"
-                value={postmortemIssues.length}
-                tone={C.orange}
-                sub="Abiertos en el periodo"
-                delta={computeDelta(postmortemIssues.length, postmortemPrevIssues.length, 'down')}
-              />
-              <KpiCard
-                label="Abiertos"
-                value={postmortemStats.totalOpen}
-                tone={C.danger}
-                sub="En curso o sin iniciar"
-                delta={computeDelta(postmortemStats.totalOpen, postmortemPrevStats.totalOpen, 'down')}
-              />
-              <KpiCard
-                label="Cerrados"
-                value={postmortemStats.totalClosed}
-                tone={C.success}
-                sub="Con resolución registrada"
-                delta={computeDelta(postmortemStats.totalClosed, postmortemPrevStats.totalClosed, 'up')}
-              />
-              <KpiCard
-                label="Resolución media"
-                value={`${Math.round(postmortemStats.avgResolutionDays * 10) / 10}d`}
-                tone={C.g600}
-                sub="Tiempo medio de cierre"
-                delta={computeDelta(postmortemStats.avgResolutionDays, postmortemPrevStats.avgResolutionDays, 'down', { absolute: true, unit: 'd' })}
-              />
+              <KpiCardRow cards={entityKpiCards('Postmortems', postmortemIssues.length, postmortemPrevIssues.length, postmortemStats, postmortemPrevStats)} />
             </div>
 
             <StateAndPriorityChart byState={postmortemStats.byState} byPriority={postmortemStats.byPriority} />
@@ -686,33 +379,17 @@ export default function Home() {
         ) : activeTab === 'pmtasks' ? (
           <>
             <div className="mo-anim" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(210px,1fr))', gap: 16, marginBottom: 24 }}>
-              <KpiCard
-                label="Total PM Tasks"
-                value={pmCurrentStats.total}
-                tone={C.orange}
-                sub="Derivadas de postmortems del periodo"
-                delta={computeDelta(pmCurrentStats.total, pmPrevStats.total, 'down')}
-              />
-              <KpiCard
-                label="Pendientes"
-                value={pmCurrentStats.pending}
-                tone={C.danger}
-                sub="Aún no cerradas"
-                delta={computeDelta(pmCurrentStats.pending, pmPrevStats.pending, 'down')}
-              />
-              <KpiCard
-                label="Completadas"
-                value={pmCurrentStats.done}
-                tone={C.success}
-                sub="Cerradas o resueltas"
-                delta={computeDelta(pmCurrentStats.done, pmPrevStats.done, 'up')}
-              />
-              <KpiCard
-                label="% Completado"
-                value={`${pmCurrentStats.pct}%`}
-                tone={C.g600}
-                sub="Sobre el total del periodo"
-                delta={computeDelta(pmCurrentStats.pct, pmPrevStats.pct, 'up')}
+              <KpiCardRow
+                cards={subtaskKpiCards({
+                  totalLabel: 'Total PM Tasks',
+                  totalSub: 'Derivadas de postmortems del periodo',
+                  doneLabel: 'Completadas',
+                  doneSub: 'Cerradas o resueltas',
+                  pendingSub: 'Aún no cerradas',
+                  pctSub: 'Sobre el total del periodo',
+                  stats: pmCurrentStats,
+                  prevStats: pmPrevStats,
+                })}
               />
             </div>
 
@@ -732,34 +409,7 @@ export default function Home() {
         ) : activeTab === 'problema' ? (
           <>
             <div className="mo-anim" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(210px,1fr))', gap: 16, marginBottom: 24 }}>
-              <KpiCard
-                label="Total Problemas"
-                value={problemaIssues.length}
-                tone={C.orange}
-                sub="Abiertos en el periodo"
-                delta={computeDelta(problemaIssues.length, problemaPrevIssues.length, 'down')}
-              />
-              <KpiCard
-                label="Abiertos"
-                value={problemaStats.totalOpen}
-                tone={C.danger}
-                sub="En curso o sin iniciar"
-                delta={computeDelta(problemaStats.totalOpen, problemaPrevStats.totalOpen, 'down')}
-              />
-              <KpiCard
-                label="Cerrados"
-                value={problemaStats.totalClosed}
-                tone={C.success}
-                sub="Con resolución registrada"
-                delta={computeDelta(problemaStats.totalClosed, problemaPrevStats.totalClosed, 'up')}
-              />
-              <KpiCard
-                label="Resolución media"
-                value={`${Math.round(problemaStats.avgResolutionDays * 10) / 10}d`}
-                tone={C.g600}
-                sub="Tiempo medio de cierre"
-                delta={computeDelta(problemaStats.avgResolutionDays, problemaPrevStats.avgResolutionDays, 'down', { absolute: true, unit: 'd' })}
-              />
+              <KpiCardRow cards={entityKpiCards('Problemas', problemaIssues.length, problemaPrevIssues.length, problemaStats, problemaPrevStats)} />
             </div>
 
             <StateAndPriorityChart byState={problemaStats.byState} byPriority={problemaStats.byPriority} />
@@ -787,33 +437,17 @@ export default function Home() {
         ) : (
           <>
             <div className="mo-anim" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(210px,1fr))', gap: 16, marginBottom: 24 }}>
-              <KpiCard
-                label="Total Puntos de Acción"
-                value={apCurrentStats.total}
-                tone={C.orange}
-                sub="Derivados de problemas del periodo"
-                delta={computeDelta(apCurrentStats.total, apPrevStats.total, 'down')}
-              />
-              <KpiCard
-                label="Pendientes"
-                value={apCurrentStats.pending}
-                tone={C.danger}
-                sub="Aún no cerrados"
-                delta={computeDelta(apCurrentStats.pending, apPrevStats.pending, 'down')}
-              />
-              <KpiCard
-                label="Completados"
-                value={apCurrentStats.done}
-                tone={C.success}
-                sub="Cerrados o resueltos"
-                delta={computeDelta(apCurrentStats.done, apPrevStats.done, 'up')}
-              />
-              <KpiCard
-                label="% Completado"
-                value={`${apCurrentStats.pct}%`}
-                tone={C.g600}
-                sub="Sobre el total del periodo"
-                delta={computeDelta(apCurrentStats.pct, apPrevStats.pct, 'up')}
+              <KpiCardRow
+                cards={subtaskKpiCards({
+                  totalLabel: 'Total Puntos de Acción',
+                  totalSub: 'Derivados de problemas del periodo',
+                  doneLabel: 'Completados',
+                  doneSub: 'Cerrados o resueltos',
+                  pendingSub: 'Aún no cerrados',
+                  pctSub: 'Sobre el total del periodo',
+                  stats: apCurrentStats,
+                  prevStats: apPrevStats,
+                })}
               />
             </div>
 

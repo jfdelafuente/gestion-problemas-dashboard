@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { C, priorityStyle, statusColor, sortByStatusOrder } from '@/lib/theme';
+import { HoverSegment } from '@/components/charts/HoverSegment';
 
 interface StateAndPriorityChartProps {
   byState: Record<string, number>;
@@ -47,43 +48,20 @@ function DistributionPanel({
               El redondeo de los extremos se aplica solo al primer/último segmento en su lugar. */}
           <div style={{ display: 'flex', height: 12, borderRadius: 999, background: C.g100 }}>
             {entries.map(([k, v], i) => (
-              <div
+              <HoverSegment
                 key={k}
+                color={colorFor(k)}
+                isFirst={i === 0}
+                isLast={i === entries.length - 1}
+                isSingle={entries.length === 1}
+                borderRadiusWhenRounded={999}
+                tooltip={`${k}: ${v} (${Math.round((v / total) * 100)}%)`}
+                tooltipMarginBottom={8}
+                isHovered={hover === k}
                 onMouseEnter={() => setHover(k)}
                 onMouseLeave={() => setHover((cur) => (cur === k ? null : cur))}
-                style={{
-                  position: 'relative',
-                  width: `${(v / total) * 100}%`,
-                  background: colorFor(k),
-                  cursor: 'pointer',
-                  borderRadius:
-                    entries.length === 1 ? 999 : i === 0 ? '999px 0 0 999px' : i === entries.length - 1 ? '0 999px 999px 0' : 0,
-                }}
-              >
-                {hover === k && (
-                  <div
-                    style={{
-                      position: 'absolute',
-                      bottom: '100%',
-                      left: '50%',
-                      transform: 'translateX(-50%)',
-                      marginBottom: 8,
-                      background: C.ink,
-                      color: C.white,
-                      fontSize: 11.5,
-                      fontWeight: 600,
-                      padding: '5px 9px',
-                      borderRadius: 6,
-                      whiteSpace: 'nowrap',
-                      pointerEvents: 'none',
-                      boxShadow: 'var(--shadow-2)',
-                      zIndex: 5,
-                    }}
-                  >
-                    {k}: {v} ({Math.round((v / total) * 100)}%)
-                  </div>
-                )}
-              </div>
+                style={{ width: `${(v / total) * 100}%` }}
+              />
             ))}
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px 20px', marginTop: 16 }}>

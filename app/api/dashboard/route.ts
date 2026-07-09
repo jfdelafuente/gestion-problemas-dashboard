@@ -1,12 +1,9 @@
 import { getDashboardStats } from '@/lib/jira';
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
-    const searchParams = request.nextUrl.searchParams;
-    const days = parseInt(searchParams.get('days') || '30');
-
-    const stats = await getDashboardStats(days);
+    const stats = await getDashboardStats();
 
     return NextResponse.json(stats, {
       headers: {

@@ -79,11 +79,6 @@ export interface DashboardIssueRow {
 }
 
 export interface DashboardStats {
-  totalOpen: number;
-  totalClosed: number;
-  byState: Record<string, number>;
-  byPriority: Record<string, number>;
-  timeline: Array<{ date: string; created: number; closed: number }>;
   issues: DashboardIssueRow[];
 }
 
@@ -275,7 +270,7 @@ export async function getIssuesByProject(): Promise<JiraIssue[]> {
   }
 }
 
-export async function getDashboardStats(days: number = 30): Promise<DashboardStats> {
+export async function getDashboardStats(): Promise<DashboardStats> {
   const issues = await getIssuesByProject();
 
   const subtaskKeys = issues.flatMap((issue) => issue.fields.subtasks?.map((s) => s.key) || []);
@@ -284,55 +279,6 @@ export async function getDashboardStats(days: number = 30): Promise<DashboardSta
   const postmortemKeys = issues.filter((issue) => issue.fields.issuetype.name === 'Postmortem').map((issue) => issue.key);
   const wikiPageLinks = await getWikiPageLinks(postmortemKeys);
   const incidentRefs = await getPostmortemIncidentRefs(postmortemKeys);
-
-  const now = new Date();
-  const pastDate = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
-
-  const byState: Record<string, number> = {};
-  const byPriority: Record<string, number> = {};
-  const timelineMap: Record<string, { created: number; closed: number }> = {};
-
-  let totalOpen = 0;
-  let totalClosed = 0;
-
-  issues.forEach((issue) => {
-    const status = issue.fields.status.name;
-    const priority = issue.fields.priority.name;
-    const createdDate = new Date(issue.fields.created);
-    const dateKey = createdDate.toISOString().split('T')[0];
-
-    // Count by state
-    byState[status] = (byState[status] || 0) + 1;
-    if (status === 'Open' || status === 'To Do' || status === 'In Progress') {
-      totalOpen++;
-    } else {
-      totalClosed++;
-    }
-
-    // Count by priority
-    byPriority[priority] = (byPriority[priority] || 0) + 1;
-
-    // Timeline data
-    if (createdDate >= pastDate) {
-      if (!timelineMap[dateKey]) {
-        timelineMap[dateKey] = { created: 0, closed: 0 };
-      }
-      timelineMap[dateKey].created++;
-
-      if (issue.fields.resolutiondate) {
-        const resolvedDate = new Date(issue.fields.resolutiondate);
-        const resolvedKey = resolvedDate.toISOString().split('T')[0];
-        if (!timelineMap[resolvedKey]) {
-          timelineMap[resolvedKey] = { created: 0, closed: 0 };
-        }
-        timelineMap[resolvedKey].closed++;
-      }
-    }
-  });
-
-  const timeline = Object.entries(timelineMap)
-    .sort(([dateA], [dateB]) => dateA.localeCompare(dateB))
-    .map(([date, data]) => ({ date, ...data }));
 
   const issueRows: DashboardIssueRow[] = issues
     .map((issue) => ({
@@ -365,12 +311,5 @@ export async function getDashboardStats(days: number = 30): Promise<DashboardSta
     }))
     .sort((a, b) => b.created.localeCompare(a.created));
 
-  return {
-    totalOpen,
-    totalClosed,
-    byState,
-    byPriority,
-    timeline,
-    issues: issueRows,
-  };
+  return { issues: issueRows };
 }

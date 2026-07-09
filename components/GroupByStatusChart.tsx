@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { C, statusColor, sortByStatusOrder } from '@/lib/theme';
+import { HoverSegment } from '@/components/charts/HoverSegment';
 import ChartCard from '@/components/charts/ChartCard';
 import ChartLegend from '@/components/charts/ChartLegend';
 
@@ -54,49 +55,20 @@ export default function GroupByStatusChart({
                     const group = String(row.group);
                     const isHovered = hover?.group === group && hover.status === s;
                     return (
-                      <div
+                      <HoverSegment
                         key={s}
+                        color={statusColor(s)}
+                        isFirst={i === 0}
+                        isLast={i === visibleStatuses.length - 1}
+                        isSingle={visibleStatuses.length === 1}
+                        borderRadiusWhenRounded={5}
+                        tooltip={`${s}: ${row[s]}`}
+                        tooltipMarginBottom={6}
+                        isHovered={isHovered}
                         onMouseEnter={() => setHover({ group, status: s })}
                         onMouseLeave={() => setHover((cur) => (cur?.group === group && cur.status === s ? null : cur))}
-                        style={{
-                          position: 'relative',
-                          flex: Number(row[s]),
-                          background: statusColor(s),
-                          cursor: 'pointer',
-                          borderRadius:
-                            visibleStatuses.length === 1
-                              ? 5
-                              : i === 0
-                                ? '5px 0 0 5px'
-                                : i === visibleStatuses.length - 1
-                                  ? '0 5px 5px 0'
-                                  : 0,
-                        }}
-                      >
-                        {isHovered && (
-                          <div
-                            style={{
-                              position: 'absolute',
-                              bottom: '100%',
-                              left: '50%',
-                              transform: 'translateX(-50%)',
-                              marginBottom: 6,
-                              background: C.ink,
-                              color: C.white,
-                              fontSize: 11.5,
-                              fontWeight: 600,
-                              padding: '5px 9px',
-                              borderRadius: 6,
-                              whiteSpace: 'nowrap',
-                              pointerEvents: 'none',
-                              boxShadow: 'var(--shadow-2)',
-                              zIndex: 5,
-                            }}
-                          >
-                            {s}: {row[s]}
-                          </div>
-                        )}
-                      </div>
+                        style={{ flex: Number(row[s]) }}
+                      />
                     );
                   });
                 })()}

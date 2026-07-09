@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react';
 import { C, formatDate } from '@/lib/theme';
 import { StatusChip, PriorityPill, KeyLink, GroupTags } from '@/components/ui/Chips';
+import { ALL, thStyle, tdStyle, uniqueSorted, TableFilterBar } from '@/components/table/shared';
 
 interface ActionPointRow {
   key: string;
@@ -23,41 +24,6 @@ interface ActionPointsTableProps {
   emptyLabel?: string;
   showActionPointType?: boolean;
   groupColumn?: 'involved' | 'assigned';
-}
-
-const ALL = '__all__';
-
-const thStyle: React.CSSProperties = {
-  textAlign: 'left',
-  padding: '0 14px 10px',
-  fontSize: 10.5,
-  fontWeight: 700,
-  textTransform: 'uppercase',
-  letterSpacing: '.07em',
-  color: C.g400,
-  whiteSpace: 'nowrap',
-};
-
-const tdStyle: React.CSSProperties = {
-  padding: '12px 14px',
-  fontSize: 13,
-  color: C.g700,
-  verticalAlign: 'top',
-};
-
-const selectStyle: React.CSSProperties = {
-  padding: '9px 12px',
-  border: `1px solid ${C.g200}`,
-  borderRadius: 8,
-  fontSize: 13,
-  color: C.ink,
-  cursor: 'pointer',
-  outline: 'none',
-  backgroundColor: '#fff',
-};
-
-function uniqueSorted(values: Array<string | undefined>) {
-  return Array.from(new Set(values.filter((v): v is string => !!v))).sort((a, b) => a.localeCompare(b));
 }
 
 export default function ActionPointsTable({
@@ -120,55 +86,16 @@ export default function ActionPointsTable({
         </span>
       </div>
 
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginBottom: 16 }}>
-        <div style={{ position: 'relative', flex: 1, minWidth: 220 }}>
-          <svg
-            style={{ position: 'absolute', left: 11, top: '50%', transform: 'translateY(-50%)', color: C.g400 }}
-            width="15"
-            height="15"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2.2"
-            strokeLinecap="round"
-          >
-            <circle cx="11" cy="11" r="7" />
-            <path d="m21 21-4.3-4.3" />
-          </svg>
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Buscar por clave o resumen…"
-            className="mo-input"
-            style={{ width: '100%', padding: '9px 12px 9px 34px', border: `1px solid ${C.g200}`, borderRadius: 8, fontSize: 13, color: C.ink, outline: 'none' }}
-          />
-        </div>
-        <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="mo-select" style={selectStyle}>
-          <option value={ALL}>Todos los estados</option>
-          {statusOptions.map((status) => (
-            <option key={status} value={status}>
-              {status}
-            </option>
-          ))}
-        </select>
-        <select value={groupFilter} onChange={(e) => setGroupFilter(e.target.value)} className="mo-select" style={selectStyle}>
-          <option value={ALL}>{groupFilterAllLabel}</option>
-          {groupOptions.map((group) => (
-            <option key={group} value={group}>
-              {group}
-            </option>
-          ))}
-        </select>
-        {hasActiveFilters && (
-          <button
-            onClick={clearFilters}
-            style={{ padding: '9px 14px', background: 'none', border: `1px solid ${C.g200}`, borderRadius: 8, fontSize: 13, fontWeight: 600, color: C.orange, cursor: 'pointer' }}
-          >
-            Limpiar filtros
-          </button>
-        )}
-      </div>
+      <TableFilterBar
+        search={search}
+        onSearchChange={setSearch}
+        selects={[
+          { value: statusFilter, onChange: setStatusFilter, allLabel: 'Todos los estados', options: statusOptions },
+          { value: groupFilter, onChange: setGroupFilter, allLabel: groupFilterAllLabel, options: groupOptions },
+        ]}
+        hasActiveFilters={hasActiveFilters}
+        onClear={clearFilters}
+      />
 
       <div style={{ overflowX: 'auto', margin: '0 -24px', padding: '0 24px' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 900 }}>

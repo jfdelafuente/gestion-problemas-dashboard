@@ -48,6 +48,33 @@ export function computeDelta(
   return { dir, text, good };
 }
 
+const STYLE_PRESETS = {
+  FULL: {
+    container: { background: C.white, borderRadius: 14, boxShadow: 'var(--shadow-1)' },
+    bar: { height: 3 },
+    contentPadding: '18px 20px 20px',
+    headerMinHeight: 26,
+    headerFontSize: 11,
+    valueFontSize: 42,
+    deltaFontSize: 12,
+    deltaPadding: '3px 8px',
+    deltaMarginBottom: 4,
+    marginTopAfterHeader: 8,
+  },
+  COMPACT: {
+    container: { background: C.g50, borderRadius: 10, boxShadow: 'none' },
+    bar: { height: 2 },
+    contentPadding: '12px 14px 13px',
+    headerMinHeight: 18,
+    headerFontSize: 10,
+    valueFontSize: 26,
+    deltaFontSize: 11,
+    deltaPadding: '2px 6px',
+    deltaMarginBottom: 2,
+    marginTopAfterHeader: 4,
+  },
+} as const;
+
 // Icono por rol de la tarjeta (deducido del tono, ya consistente en toda la app: naranja =
 // total, rojo = pendiente/abierto, verde = completado/cerrado, gris oscuro = medida/ritmo).
 // Da una segunda señal además del color, para no depender solo de distinguir tonos.
@@ -97,26 +124,33 @@ function RoleIcon({ tone }: { tone: string }) {
 }
 
 export default function KpiCard({ label, value, tone, sub, delta, compact = false }: KpiCardProps) {
+  const preset = compact ? STYLE_PRESETS.COMPACT : STYLE_PRESETS.FULL;
   const deltaColor = delta ? (delta.good ? C.success : C.danger) : C.g400;
   const deltaBg = delta ? (delta.good ? '#E4F1EA' : '#FBE3E1') : C.g100;
 
   return (
-    <div style={{ background: compact ? C.g50 : C.white, border: `1px solid ${C.g200}`, borderRadius: compact ? 10 : 14, overflow: 'hidden', boxShadow: compact ? 'none' : 'var(--shadow-1)' }}>
-      <div style={{ height: compact ? 2 : 3, background: tone }} />
-      <div style={{ padding: compact ? '12px 14px 13px' : '18px 20px 20px' }}>
-        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8, minHeight: compact ? 18 : 26 }}>
-          <div style={{ fontSize: compact ? 10 : 11, textTransform: 'uppercase', letterSpacing: '.09em', fontWeight: 600, color: C.g400 }}>
+    <div
+      style={{
+        ...preset.container,
+        border: `1px solid ${C.g200}`,
+        overflow: 'hidden',
+      }}
+    >
+      <div style={{ background: tone, ...preset.bar }} />
+      <div style={{ padding: preset.contentPadding }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8, minHeight: preset.headerMinHeight }}>
+          <div style={{ fontSize: preset.headerFontSize, textTransform: 'uppercase', letterSpacing: '.09em', fontWeight: 600, color: C.g400 }}>
             {label}
           </div>
           <span style={{ color: tone, opacity: 0.5, flexShrink: 0, marginTop: 1 }}>
             <RoleIcon tone={tone} />
           </span>
         </div>
-        <div style={{ display: 'flex', alignItems: 'flex-end', gap: 10, marginTop: compact ? 4 : 8 }}>
+        <div style={{ display: 'flex', alignItems: 'flex-end', gap: 10, marginTop: preset.marginTopAfterHeader }}>
           <div
             style={{
               fontFamily: 'var(--font-display)',
-              fontSize: compact ? 26 : 42,
+              fontSize: preset.valueFontSize,
               fontWeight: 800,
               lineHeight: 1,
               letterSpacing: '-.03em',
@@ -132,11 +166,11 @@ export default function KpiCard({ label, value, tone, sub, delta, compact = fals
                 display: 'inline-flex',
                 alignItems: 'center',
                 gap: 3,
-                fontSize: compact ? 11 : 12,
+                fontSize: preset.deltaFontSize,
                 fontWeight: 700,
-                padding: compact ? '2px 6px' : '3px 8px',
+                padding: preset.deltaPadding,
                 borderRadius: 999,
-                marginBottom: compact ? 2 : 4,
+                marginBottom: preset.deltaMarginBottom,
                 background: deltaBg,
                 color: deltaColor,
               }}
