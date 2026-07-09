@@ -229,10 +229,13 @@ function eachDateKey(from: Date, to: Date) {
   return keys;
 }
 
-function buildTimelineWithBacklog(items: Array<{ created?: string; resolutiondate?: string }>, days: number) {
-  const pastDate = new Date(Date.now() - days * DAY);
-  const pastDateKey = localDateKey(pastDate);
-
+// Backlog histórico real: creados - resueltos acumulados desde siempre, no solo desde el
+// arranque del periodo visible — un item creado antes del periodo y resuelto dentro (o
+// viceversa) tiene que contar en el backlog base (`baselineBacklog`), no perderse. Comparte
+// esta acumulación buildTimelineWithBacklog y buildOpenByStatusTimeline: antes estaba
+// duplicada al completo entre las dos, con el riesgo de arreglar un bug del backlog en una y
+// olvidarse de la otra (como pasó más de una vez esta misma sesión).
+function buildBacklogDayMap(items: Array<{ created?: string; resolutiondate?: string }>, pastDateKey: string) {
   const dayMap = new Map<string, { created: number; resolved: number }>();
   let baselineBacklog = 0;
 
@@ -260,6 +263,14 @@ function buildTimelineWithBacklog(items: Array<{ created?: string; resolutiondat
     }
   });
 
+  return { dayMap, baselineBacklog };
+}
+
+function buildTimelineWithBacklog(items: Array<{ created?: string; resolutiondate?: string }>, days: number) {
+  const pastDate = new Date(Date.now() - days * DAY);
+  const pastDateKey = localDateKey(pastDate);
+  const { dayMap, baselineBacklog } = buildBacklogDayMap(items, pastDateKey);
+
   let runningBacklog = baselineBacklog;
   return eachDateKey(pastDate, new Date()).map((date) => {
     const entry = dayMap.get(date) || { created: 0, resolved: 0 };
@@ -274,36 +285,7 @@ function buildOpenByStatusTimeline(
 ) {
   const pastDate = new Date(Date.now() - days * DAY);
   const pastDateKey = localDateKey(pastDate);
-
-  // Backlog histórico real: creados - resueltos acumulados, igual que en buildTimelineWithBacklog.
-  // No puede basarse solo en los items que siguen abiertos HOY, porque eso ignora los que
-  // estuvieron en backlog en el pasado y ya se resolvieron desde entonces.
-  const backlogDayMap = new Map<string, { created: number; resolved: number }>();
-  let baselineBacklog = 0;
-
-  items.forEach((item) => {
-    if (!item.created) return;
-
-    const createdKey = localDateKey(item.created);
-    if (createdKey < pastDateKey) {
-      baselineBacklog++;
-    } else {
-      const entry = backlogDayMap.get(createdKey) || { created: 0, resolved: 0 };
-      entry.created++;
-      backlogDayMap.set(createdKey, entry);
-    }
-
-    if (item.resolutiondate) {
-      const resolvedKey = localDateKey(item.resolutiondate);
-      if (resolvedKey < pastDateKey) {
-        baselineBacklog--;
-      } else {
-        const entry = backlogDayMap.get(resolvedKey) || { created: 0, resolved: 0 };
-        entry.resolved++;
-        backlogDayMap.set(resolvedKey, entry);
-      }
-    }
-  });
+  const { dayMap: backlogDayMap, baselineBacklog } = buildBacklogDayMap(items, pastDateKey);
 
   // Barras: solo los items que siguen abiertos hoy, agrupados por su fecha de creación y estado actual.
   const openItems = items.filter((item) => !item.done && item.created);
