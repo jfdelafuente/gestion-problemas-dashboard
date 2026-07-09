@@ -73,13 +73,6 @@ export default function IssuesTable({
   showIncidentRef = false,
 }: IssuesTableProps) {
   const showSecondGroupColumn = secondGroupColumn !== 'none';
-  const columnCount =
-    (showType ? 9 : 8) +
-    (showSubtasks ? 1 : 0) +
-    (showWikiPage ? 1 : 0) +
-    (showIncidentRef ? 1 : 0) -
-    (showSecondGroupColumn ? 0 : 1) -
-    (showAssignedGroup ? 0 : 1);
   const secondGroupLabel = secondGroupColumn === 'resolving' ? 'Grupo/s Resolutor/es' : 'Grupo Involucrado';
   const [expandedKeys, setExpandedKeys] = useState<Set<string>>(new Set());
 
@@ -278,7 +271,7 @@ export default function IssuesTable({
                   </tr>
                   {canExpand && isExpanded && (
                     <tr>
-                      <td colSpan={columnCount} style={{ padding: '0 14px 14px' }}>
+                      <td colSpan={9999} style={{ padding: '0 14px 14px' }}>
                         <div style={{ borderLeft: `3px solid ${C.orange}`, background: C.orangeTint + '55', borderRadius: '0 8px 8px 0', padding: '12px 16px' }}>
                           <div style={{ fontSize: 10.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.08em', color: C.g500, marginBottom: 8 }}>
                             {subtasksLabel} · {issue.subtasksTotal}
@@ -346,7 +339,7 @@ export default function IssuesTable({
             })}
             {filteredIssues.length === 0 && (
               <tr>
-                <td colSpan={columnCount} style={{ padding: 40, textAlign: 'center', color: C.g400, fontSize: 13 }}>
+                <td colSpan={9999} style={{ padding: 40, textAlign: 'center', color: C.g400, fontSize: 13 }}>
                   {issues.length === 0
                     ? 'No hay problemas para mostrar en este periodo'
                     : 'No hay problemas que coincidan con los filtros'}
