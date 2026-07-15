@@ -55,6 +55,7 @@ interface IssuesTableProps {
   showFilters?: boolean;
   showWikiPage?: boolean;
   showIncidentRef?: boolean;
+  incidentRefLabel?: string;
 }
 
 export default function IssuesTable({
@@ -71,6 +72,7 @@ export default function IssuesTable({
   showFilters = false,
   showWikiPage = false,
   showIncidentRef = false,
+  incidentRefLabel = 'EPSILON',
 }: IssuesTableProps) {
   const showSecondGroupColumn = secondGroupColumn !== 'none';
   const secondGroupLabel = secondGroupColumn === 'resolving' ? 'Grupo/s Resolutor/es' : 'Grupo Involucrado';
@@ -149,7 +151,7 @@ export default function IssuesTable({
             <tr style={{ borderBottom: `2px solid ${C.g100}` }}>
               <th style={thStyle}>Clave</th>
               <th style={thStyle}>Resumen</th>
-              {showIncidentRef && <th style={thStyle}>EPSILON</th>}
+              {showIncidentRef && <th style={thStyle}>{incidentRefLabel}</th>}
               <th style={thStyle}>Estado</th>
               <th style={thStyle}>Prioridad</th>
               {showType && <th style={thStyle}>Tipo</th>}

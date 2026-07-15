@@ -96,18 +96,18 @@ const SEARCH_FIELDS = [
   'subtasks',
 ].join(',');
 
-// Los postmortems referencian a veces un incidente de Remedy/ServiceNow como
-// texto suelto dentro de la Descripción (no es un campo de Jira independiente),
+// Los postmortems y problemas referencian a veces un incidente de Remedy/ServiceNow
+// como texto suelto dentro de la Descripción (no es un campo de Jira independiente),
 // con un formato variable de dígitos: INC000004068764, INC000004030052, etc.
 function extractIncidentRef(description?: string): string | undefined {
   return description?.match(/INC\d{6,}/)?.[0];
 }
 
 // La Descripción pesa bastante (varios KB por issue) y solo hace falta para
-// extraer el incidente en los Postmortems, así que se pide aparte —vía
+// extraer el incidente en Postmortems y Problemas, así que se pide aparte —vía
 // key in (...), igual que getSubtaskExtraFields— en vez de en SEARCH_FIELDS,
 // donde se pediría (y pagaría en bytes) para los ~1650 issues del proyecto.
-async function getPostmortemIncidentRefs(keys: string[]): Promise<Map<string, string>> {
+async function getIncidentRefs(keys: string[]): Promise<Map<string, string>> {
   const refsByKey = new Map<string, string>();
   const chunkSize = 150;
 
@@ -126,7 +126,7 @@ async function getPostmortemIncidentRefs(keys: string[]): Promise<Map<string, st
         if (ref) refsByKey.set(issue.key, ref);
       });
     } catch (error) {
-      console.error('Error fetching postmortem descriptions from Jira:', error);
+      console.error('Error fetching issue descriptions from Jira:', error);
     }
   }
 
@@ -277,8 +277,9 @@ export async function getDashboardStats(): Promise<DashboardStats> {
   const subtaskExtras = await getSubtaskExtraFields(subtaskKeys);
 
   const postmortemKeys = issues.filter((issue) => issue.fields.issuetype.name === 'Postmortem').map((issue) => issue.key);
+  const problemaKeys = issues.filter((issue) => issue.fields.issuetype.name === 'Problema').map((issue) => issue.key);
   const wikiPageLinks = await getWikiPageLinks(postmortemKeys);
-  const incidentRefs = await getPostmortemIncidentRefs(postmortemKeys);
+  const incidentRefs = await getIncidentRefs([...postmortemKeys, ...problemaKeys]);
 
   const issueRows: DashboardIssueRow[] = issues
     .map((issue) => ({

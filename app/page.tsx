@@ -432,6 +432,8 @@ export default function Home() {
               showActionPointType
               showSubtaskInvolvedGroup
               showFilters
+              showIncidentRef
+              incidentRefLabel="INCIDENCIA"
             />
           </>
         ) : (
