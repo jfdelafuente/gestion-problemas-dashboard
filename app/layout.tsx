@@ -14,9 +14,11 @@ const robotoMono = Roboto_Mono({
   weight: ["400", "500"],
 });
 
+import MoTopbar from "@/components/MoTopbar";
+
 export const metadata: Metadata = {
   title: "Gestión de Problemas",
-  description: "Seguimiento de problemas, postmortems y puntos de acción · Jira Cloud",
+  description: "Seguimiento de problemas, postmortems y puntos de acción · Jira",
 };
 
 export default function RootLayout({
@@ -29,7 +31,10 @@ export default function RootLayout({
       lang="es"
       className={`${inter.variable} ${robotoMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body className="min-h-full flex flex-col">
+        <MoTopbar active="problemas" />
+        {children}
+      </body>
     </html>
   );
 }

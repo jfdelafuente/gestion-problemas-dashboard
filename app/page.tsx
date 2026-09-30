@@ -155,11 +155,12 @@ export default function Home() {
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [activeTab, setActiveTab] = useState<Tab>('general');
 
-  const fetchStats = async () => {
+  const fetchStats = async (forceRefresh = false) => {
     try {
       setLoading(true);
       const basePath = process.env.NEXT_PUBLIC_BASE_PATH || '';
-      const response = await fetch(`${basePath}/api/dashboard?days=${selectedDays}`);
+      const url = `${basePath}/api/dashboard${forceRefresh ? '?refresh=true' : ''}`;
+      const response = await fetch(url);
       if (!response.ok) {
         throw new Error('Error fetching dashboard stats');
       }
@@ -176,13 +177,10 @@ export default function Home() {
   };
 
   useEffect(() => {
-    // Fetch-on-mount + polling interval; fetchStats sets state intentionally.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchStats();
-    const interval = setInterval(fetchStats, 3600000);
+    const interval = setInterval(() => fetchStats(false), 3600000);
     return () => clearInterval(interval);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedDays]);
+  }, []);
 
   const { periodStart, prevPeriodStart, periodEnd, rangeLabel } = useMemo(() => computePeriod(selectedDays, formatDate), [selectedDays]);
 
@@ -265,7 +263,7 @@ export default function Home() {
         selectedDays={selectedDays}
         onDaysChange={setSelectedDays}
         lastUpdated={lastUpdated}
-        onRefresh={fetchStats}
+        onRefresh={() => fetchStats(true)}
       />
 
       <main style={{ maxWidth: 1320, margin: '0 auto', padding: '28px 32px 72px' }}>
