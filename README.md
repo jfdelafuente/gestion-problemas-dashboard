@@ -59,7 +59,7 @@ Esta app está pensada para **Jira Server / Data Center**, no Jira Cloud: usa au
 │   ├── page.tsx                   # Página principal: estado, filtros, pestañas y composición
 │   └── globals.css                # Tokens de diseño (colores, tipografía) y estilos globales
 ├── components/
-│   ├── DashboardHeader.tsx        # Cabecera negra: logo, tabs, selector de periodo
+│   ├── DashboardHeader.tsx        # Cabecera: tabs, selector de periodo, última actualización
 │   ├── KpiCard.tsx                # Tarjeta KPI con pill de variación
 │   ├── StateAndPriorityChart.tsx  # Distribución por estado/prioridad (barra + leyenda)
 │   ├── TimelineChart.tsx          # Entradas/Resueltas/Backlog

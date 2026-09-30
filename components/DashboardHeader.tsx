@@ -39,9 +39,8 @@ export default function DashboardHeader({
   return (
     <header
       style={{
-        background: C.ink,
-        color: C.white,
-        borderBottom: '1px solid rgba(255,255,255,.08)',
+        background: C.white,
+        borderBottom: `1px solid ${C.g200}`,
       }}
     >
       <div
@@ -64,18 +63,7 @@ export default function DashboardHeader({
               <button
                 key={t.id}
                 onClick={() => onTabChange(t.id)}
-                style={{
-                  background: 'transparent',
-                  color: active ? '#fff' : 'rgba(255,255,255,.6)',
-                  border: 'none',
-                  borderBottom: `2.5px solid ${active ? C.orange : 'transparent'}`,
-                  padding: '15px 16px 13px',
-                  fontSize: 13.5,
-                  fontWeight: active ? 700 : 500,
-                  cursor: 'pointer',
-                  transition: 'color var(--dur-fast) var(--ease-out)',
-                  letterSpacing: '-.01em',
-                }}
+                className={`mo-subbar-tab ${active ? 'active' : ''}`}
               >
                 {t.label}
               </button>
@@ -84,25 +72,14 @@ export default function DashboardHeader({
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '8px 0' }}>
-          <div style={{ display: 'inline-flex', background: 'rgba(255,255,255,.08)', borderRadius: 8, padding: 3 }}>
+          <div style={{ display: 'inline-flex', background: C.g100, border: `1px solid ${C.g200}`, borderRadius: 8, padding: 3 }}>
             {PERIODS.map((p) => {
               const active = selectedDays === p.days;
               return (
                 <button
                   key={p.days}
                   onClick={() => onDaysChange(p.days)}
-                  style={{
-                    background: active ? C.orange : 'transparent',
-                    color: active ? '#fff' : 'rgba(255,255,255,.7)',
-                    border: 'none',
-                    borderRadius: 6,
-                    padding: '5px 11px',
-                    fontSize: 12,
-                    fontWeight: 600,
-                    cursor: 'pointer',
-                    transition: 'all var(--dur-fast) var(--ease-out)',
-                    whiteSpace: 'nowrap',
-                  }}
+                  className={`mo-subbar-period ${active ? 'active' : ''}`}
                 >
                   {p.label}
                 </button>
@@ -110,13 +87,13 @@ export default function DashboardHeader({
             })}
           </div>
 
-          <div style={{ width: 1, height: 22, background: 'rgba(255,255,255,.15)' }} />
+          <div style={{ width: 1, height: 22, background: C.g200 }} />
 
           <div style={{ textAlign: 'right', lineHeight: 1.2 }}>
-            <div style={{ fontSize: 9.5, textTransform: 'uppercase', letterSpacing: '.1em', color: 'rgba(255,255,255,.45)', fontWeight: 600 }}>
+            <div style={{ fontSize: 9.5, textTransform: 'uppercase', letterSpacing: '.1em', color: C.g400, fontWeight: 600 }}>
               Última actualización
             </div>
-            <div style={{ fontSize: 12, color: 'rgba(255,255,255,.85)', marginTop: 2, fontWeight: 500 }}>
+            <div style={{ fontSize: 12, color: C.g700, marginTop: 2, fontWeight: 600 }}>
               {lastUpdated ? lastUpdated.toLocaleString('es-ES') : '—'}
             </div>
           </div>

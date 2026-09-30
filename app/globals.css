@@ -194,3 +194,52 @@ select {
   border-bottom-color: #FF7900;
 }
 
+/* ============================================================
+   Cabecera de navegación y filtros (DashboardHeader)
+   ============================================================ */
+.mo-subbar-tab {
+  background: transparent;
+  border: none;
+  border-bottom: 2.5px solid transparent;
+  padding: 15px 16px 13px;
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--mo-grey-500);
+  cursor: pointer;
+  letter-spacing: -0.01em;
+  transition: color var(--dur-fast) var(--ease-out);
+}
+
+.mo-subbar-tab:hover {
+  color: var(--mo-black);
+}
+
+.mo-subbar-tab.active {
+  color: var(--mo-black);
+  font-weight: 700;
+  border-bottom-color: var(--mo-orange);
+}
+
+.mo-subbar-period {
+  background: transparent;
+  color: var(--mo-grey-600);
+  border: none;
+  border-radius: 6px;
+  padding: 5px 11px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--dur-fast) var(--ease-out);
+  white-space: nowrap;
+}
+
+.mo-subbar-period:hover:not(.active) {
+  color: var(--mo-black);
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.mo-subbar-period.active {
+  background: var(--mo-orange);
+  color: #fff;
+}
+
