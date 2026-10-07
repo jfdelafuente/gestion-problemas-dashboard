@@ -4,6 +4,7 @@ import { Fragment, useMemo, useState } from 'react';
 import { C, formatDate, incidentUrl } from '@/lib/theme';
 import { StatusChip, PriorityPill, KeyLink, GroupTags } from '@/components/ui/Chips';
 import { ALL, thStyle, tdStyle, uniqueSorted, TableFilterBar } from '@/components/table/shared';
+import ExecutiveReportModal from '@/components/ExecutiveReportModal';
 
 function splitGroups(value: string) {
   return value
@@ -56,6 +57,7 @@ interface IssuesTableProps {
   showWikiPage?: boolean;
   showIncidentRef?: boolean;
   incidentRefLabel?: string;
+  showExecutiveReport?: boolean;
 }
 
 export default function IssuesTable({
@@ -73,10 +75,13 @@ export default function IssuesTable({
   showWikiPage = false,
   showIncidentRef = false,
   incidentRefLabel = 'EPSILON',
+  showExecutiveReport = false,
 }: IssuesTableProps) {
   const showSecondGroupColumn = secondGroupColumn !== 'none';
   const secondGroupLabel = secondGroupColumn === 'resolving' ? 'Grupo/s Resolutor/es' : 'Grupo Involucrado';
   const [expandedKeys, setExpandedKeys] = useState<Set<string>>(new Set());
+  const [selectedReportIssue, setSelectedReportIssue] = useState<IssueRow | null>(null);
+  const [isReportModalOpen, setIsReportModalOpen] = useState(false);
 
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState(ALL);
@@ -161,6 +166,7 @@ export default function IssuesTable({
               <th style={thStyle}>Creado</th>
               <th style={thStyle}>Resuelto</th>
               {showWikiPage && <th style={thStyle}>Wiki Page</th>}
+              {(showExecutiveReport || showWikiPage) && <th style={thStyle}>Informe PPT</th>}
             </tr>
           </thead>
           <tbody>
@@ -270,6 +276,35 @@ export default function IssuesTable({
                         )}
                       </td>
                     )}
+                    {(showExecutiveReport || showWikiPage) && (
+                      <td style={{ ...tdStyle, whiteSpace: 'nowrap' }}>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedReportIssue(issue);
+                            setIsReportModalOpen(true);
+                          }}
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 5,
+                            padding: '3px 8px',
+                            borderRadius: 5,
+                            border: `1px solid ${C.orange}`,
+                            background: '#fff',
+                            color: C.orange,
+                            fontSize: 12,
+                            fontWeight: 600,
+                            cursor: 'pointer',
+                            transition: 'all .12s ease',
+                          }}
+                          title="Generar o descargar informe ejecutivo PowerPoint (.pptx)"
+                        >
+                          <span style={{ fontSize: 13 }}>📊</span>
+                          <span>Generar PPT</span>
+                        </button>
+                      </td>
+                    )}
                   </tr>
                   {canExpand && isExpanded && (
                     <tr>
@@ -351,6 +386,16 @@ export default function IssuesTable({
           </tbody>
         </table>
       </div>
+
+      {selectedReportIssue && (
+        <ExecutiveReportModal
+          isOpen={isReportModalOpen}
+          onClose={() => setIsReportModalOpen(false)}
+          incidentRef={selectedReportIssue.incidentRef || selectedReportIssue.key}
+          summary={selectedReportIssue.summary}
+          defaultConfluenceUrl={selectedReportIssue.wikiPage?.url}
+        />
+      )}
     </div>
   );
 }
