@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { C } from '@/lib/theme';
 
 interface ExecutiveReportModalProps {
@@ -28,6 +28,9 @@ export default function ExecutiveReportModal({
   const [successResult, setSuccessResult] = useState<{ downloadUrl: string; filename: string } | null>(null);
   const [cachedInfo, setCachedInfo] = useState<{ filename: string; downloadUrl: string } | null>(null);
 
+  const prevIsOpenRef = useRef(false);
+  const prevIncidentRef = useRef<string | null>(null);
+
   const basePath = process.env.NEXT_PUBLIC_BASE_PATH || '';
 
   const getFullUrl = (url: string) => {
@@ -38,7 +41,13 @@ export default function ExecutiveReportModal({
   };
 
   useEffect(() => {
-    if (isOpen) {
+    const justOpened = isOpen && !prevIsOpenRef.current;
+    const changedIncident = isOpen && incidentRef !== prevIncidentRef.current;
+
+    prevIsOpenRef.current = isOpen;
+    prevIncidentRef.current = incidentRef;
+
+    if (justOpened || changedIncident) {
       setConfluenceUrl(defaultConfluenceUrl || '');
       setMode('url');
       setManualText('');
@@ -149,9 +158,6 @@ export default function ExecutiveReportModal({
 
   return (
     <div
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="exec-report-modal-title"
       style={{
         position: 'fixed',
         inset: 0,
@@ -159,16 +165,34 @@ export default function ExecutiveReportModal({
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        background: 'rgba(0, 0, 0, 0.55)',
-        backdropFilter: 'blur(3px)',
         padding: 16,
       }}
-      onClick={(e) => {
-        if (e.target === e.currentTarget && !loading) onClose();
-      }}
     >
+      {/* Fondo oscuro para cerrar al hacer clic fuera */}
       <div
+        aria-hidden="true"
+        onClick={() => {
+          if (!loading) onClose();
+        }}
         style={{
+          position: 'fixed',
+          inset: 0,
+          background: 'rgba(0, 0, 0, 0.55)',
+          backdropFilter: 'blur(3px)',
+        }}
+      />
+
+      {/* Tarjeta del Diálogo Modal */}
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="exec-report-modal-title"
+        onClick={(e) => e.stopPropagation()}
+        onMouseDown={(e) => e.stopPropagation()}
+        onMouseUp={(e) => e.stopPropagation()}
+        style={{
+          position: 'relative',
+          zIndex: 1,
           background: '#fff',
           borderRadius: 12,
           boxShadow: '0 20px 40px rgba(0, 0, 0, 0.25)',
