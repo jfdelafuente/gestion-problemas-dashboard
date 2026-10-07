@@ -28,6 +28,15 @@ export default function ExecutiveReportModal({
   const [successResult, setSuccessResult] = useState<{ downloadUrl: string; filename: string } | null>(null);
   const [cachedInfo, setCachedInfo] = useState<{ filename: string; downloadUrl: string } | null>(null);
 
+  const basePath = process.env.NEXT_PUBLIC_BASE_PATH || '';
+
+  const getFullUrl = (url: string) => {
+    if (!url) return '';
+    if (url.startsWith('http://') || url.startsWith('https://')) return url;
+    const cleanPath = url.startsWith('/') ? url : `/${url}`;
+    return `${basePath}${cleanPath}`;
+  };
+
   useEffect(() => {
     if (isOpen) {
       setConfluenceUrl(defaultConfluenceUrl || '');
@@ -39,13 +48,19 @@ export default function ExecutiveReportModal({
       setCachedInfo(null);
 
       if (incidentRef) {
-        fetch(`/api/reports/executive-incident/${encodeURIComponent(incidentRef)}/status`)
-          .then((r) => r.json())
+        fetch(getFullUrl(`/api/reports/executive-incident/${encodeURIComponent(incidentRef)}/status`))
+          .then(async (r) => {
+            const contentType = r.headers.get('content-type') || '';
+            if (contentType.includes('application/json')) {
+              return r.json();
+            }
+            return null;
+          })
           .then((data) => {
             if (data && data.exists) {
               setCachedInfo({
                 filename: data.filename,
-                downloadUrl: data.downloadUrl,
+                downloadUrl: getFullUrl(data.downloadUrl),
               });
             }
           })
@@ -86,21 +101,31 @@ export default function ExecutiveReportModal({
         },
       };
 
-      const res = await fetch('/api/reports/executive-incident', {
+      const res = await fetch(getFullUrl('/api/reports/executive-incident'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
 
-      const data = await res.json();
+      let data: any = null;
+      const contentType = res.headers.get('content-type') || '';
+      if (contentType.includes('application/json')) {
+        data = await res.json();
+      } else {
+        const text = await res.text();
+        throw new Error(`Respuesta no esperada del servidor (${res.status}): ${text.slice(0, 150)}`);
+      }
 
       if (!res.ok || !data.success) {
         throw new Error(data.error || 'Error al generar la presentación PowerPoint');
       }
 
+      const downloadUrl = getFullUrl(data.downloadUrl);
+      const filename = data.filename || `RESUMEN_EJECUTIVO_${incidentRef}.pptx`;
+
       setSuccessResult({
-        downloadUrl: data.downloadUrl,
-        filename: data.filename || `RESUMEN_EJECUTIVO_${incidentRef}.pptx`,
+        downloadUrl,
+        filename,
       });
 
       if (onGenerated) {
@@ -109,8 +134,8 @@ export default function ExecutiveReportModal({
 
       // Descarga automática inmediata
       const downloadLink = document.createElement('a');
-      downloadLink.href = data.downloadUrl;
-      downloadLink.download = data.filename || `RESUMEN_EJECUTIVO_${incidentRef}.pptx`;
+      downloadLink.href = downloadUrl;
+      downloadLink.download = filename;
       document.body.appendChild(downloadLink);
       downloadLink.click();
       document.body.removeChild(downloadLink);
