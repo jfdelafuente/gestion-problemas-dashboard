@@ -177,9 +177,38 @@ export default function Home() {
   };
 
   useEffect(() => {
-    fetchStats();
+    let ignore = false;
+    const loadInitialStats = async () => {
+      try {
+        const basePath = process.env.NEXT_PUBLIC_BASE_PATH || '';
+        const response = await fetch(`${basePath}/api/dashboard`);
+        if (!response.ok) {
+          throw new Error('Error fetching dashboard stats');
+        }
+        const data = await response.json();
+        if (!ignore) {
+          setStats(data);
+          setLastUpdated(new Date());
+          setError(null);
+        }
+      } catch (err) {
+        if (!ignore) {
+          setError(err instanceof Error ? err.message : 'Unknown error occurred');
+          console.error('Error:', err);
+        }
+      } finally {
+        if (!ignore) {
+          setLoading(false);
+        }
+      }
+    };
+
+    loadInitialStats();
     const interval = setInterval(() => fetchStats(false), 3600000);
-    return () => clearInterval(interval);
+    return () => {
+      ignore = true;
+      clearInterval(interval);
+    };
   }, []);
 
   const { periodStart, prevPeriodStart, periodEnd, rangeLabel } = useMemo(() => computePeriod(selectedDays, formatDate), [selectedDays]);

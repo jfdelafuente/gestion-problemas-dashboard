@@ -40,6 +40,7 @@ interface IssueRow {
   subtasks: SubtaskRow[];
   wikiPage?: { url: string; title: string };
   incidentRef?: string;
+  description?: string;
 }
 
 interface IssuesTableProps {
@@ -394,6 +395,7 @@ export default function IssuesTable({
           incidentRef={selectedReportIssue.incidentRef || selectedReportIssue.key}
           summary={selectedReportIssue.summary}
           defaultConfluenceUrl={selectedReportIssue.wikiPage?.url}
+          issue={selectedReportIssue}
         />
       )}
     </div>

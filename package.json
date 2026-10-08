@@ -3,14 +3,18 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
+    "dev": "cross-env NEXT_PUBLIC_BASE_PATH=/problemas next dev -p 3001",
+    "dev:portal": "cross-env NEXT_PUBLIC_BASE_PATH=/problemas next dev -p 3001",
+    "dev:standalone": "cross-env NEXT_PUBLIC_BASE_PATH= next dev -p 3000",
+    "build": "cross-env NODE_ENV=production NEXT_PUBLIC_BASE_PATH=/problemas next build",
+    "build:standalone": "cross-env NODE_ENV=production next build",
+    "start": "next start -p 3001",
     "lint": "eslint"
   },
   "dependencies": {
     "axios": "^1.18.1",
     "chart.js": "^4.5.1",
+    "cross-env": "^10.1.0",
     "date-fns": "^4.4.0",
     "dotenv": "^17.4.2",
     "next": "16.2.10",

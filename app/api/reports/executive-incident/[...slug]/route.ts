@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { ExecutiveReportStatusResponse } from '@/types/executiveReport';
 
 const BACKEND_URL = process.env.BACKEND_REPORTS_URL || 'http://localhost:8000';
 
@@ -16,10 +17,10 @@ export async function GET(
     if (slug.length >= 2 && slug[slug.length - 1] === 'status') {
       const contentType = resp.headers.get('content-type') || '';
       if (contentType.includes('application/json')) {
-        const data = await resp.json();
+        const data: ExecutiveReportStatusResponse = await resp.json();
         return NextResponse.json(data, { status: resp.status });
       }
-      return NextResponse.json({ exists: false }, { status: 200 });
+      return NextResponse.json({ exists: false, incidentRef: slug[0] }, { status: 200 });
     }
 
     // Descarga de archivo binario
@@ -46,13 +47,14 @@ export async function GET(
         'Content-Disposition': contentDisposition,
       },
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error en proxy de descarga/estado de informe:', error);
+    const details = error instanceof Error ? error.message : String(error);
     return NextResponse.json(
       {
         success: false,
-        error: `No se pudo comunicar con el servidor backend (${BACKEND_URL}). Verifique que 'serve_app.py' esté arrancado.`,
-        details: error?.message,
+        error: `No se pudo comunicar con el servidor backend (${BACKEND_URL}). Verifique que el servicio (FastAPI en cso-incident-masivas-report o serve_app.py) esté arrancado en el puerto 8000.`,
+        details,
       },
       { status: 502 }
     );

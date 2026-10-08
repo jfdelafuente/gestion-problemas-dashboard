@@ -2,6 +2,12 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { C } from '@/lib/theme';
+import {
+  ExecutiveActionPoint,
+  ExecutiveReportRequest,
+  ExecutiveReportResponse,
+  ExecutiveReportStatusResponse,
+} from '@/types/executiveReport';
 
 interface ExecutiveReportModalProps {
   isOpen: boolean;
@@ -9,7 +15,54 @@ interface ExecutiveReportModalProps {
   incidentRef: string;
   summary: string;
   defaultConfluenceUrl?: string;
+  issue?: {
+    key?: string;
+    summary?: string;
+    created?: string;
+    resolutiondate?: string;
+    description?: string;
+    subtasks?: Array<{
+      key: string;
+      summary: string;
+      status: string;
+      actionPointType?: string;
+      assignedGroup?: string;
+      resolutiondate?: string;
+    }>;
+  };
   onGenerated?: () => void;
+}
+
+function formatDisplayDate(dateStr?: string): string {
+  if (!dateStr) return '';
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return '';
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function calculateDuration(startStr?: string, endStr?: string): string {
+  if (!startStr || !endStr) return '';
+  const start = new Date(startStr);
+  const end = new Date(endStr);
+  if (isNaN(start.getTime()) || isNaN(end.getTime())) return '';
+  const diffMs = end.getTime() - start.getTime();
+  if (diffMs <= 0) return '';
+  const totalMins = Math.round(diffMs / (1000 * 60));
+  const hours = Math.floor(totalMins / 60);
+  const mins = totalMins % 60;
+  if (hours > 0 && mins > 0) return `${hours}h ${mins}m`;
+  if (hours > 0) return `${hours}h`;
+  return `${mins}m`;
+}
+
+const basePath = process.env.NEXT_PUBLIC_BASE_PATH || '';
+
+function getFullUrl(url: string): string {
+  if (!url) return '';
+  if (url.startsWith('http://') || url.startsWith('https://')) return url;
+  const cleanPath = url.startsWith('/') ? url : `/${url}`;
+  return `${basePath}${cleanPath}`;
 }
 
 export default function ExecutiveReportModal({
@@ -18,6 +71,7 @@ export default function ExecutiveReportModal({
   incidentRef,
   summary,
   defaultConfluenceUrl = '',
+  issue,
   onGenerated,
 }: ExecutiveReportModalProps) {
   const [confluenceUrl, setConfluenceUrl] = useState(defaultConfluenceUrl);
@@ -31,14 +85,9 @@ export default function ExecutiveReportModal({
   const prevIsOpenRef = useRef(false);
   const prevIncidentRef = useRef<string | null>(null);
 
-  const basePath = process.env.NEXT_PUBLIC_BASE_PATH || '';
-
-  const getFullUrl = (url: string) => {
-    if (!url) return '';
-    if (url.startsWith('http://') || url.startsWith('https://')) return url;
-    const cleanPath = url.startsWith('/') ? url : `/${url}`;
-    return `${basePath}${cleanPath}`;
-  };
+  const formattedStartTime = formatDisplayDate(issue?.created);
+  const computedDuration = calculateDuration(issue?.created, issue?.resolutiondate);
+  const actionPointsCount = issue?.subtasks?.length || 0;
 
   useEffect(() => {
     const justOpened = isOpen && !prevIsOpenRef.current;
@@ -61,12 +110,12 @@ export default function ExecutiveReportModal({
           .then(async (r) => {
             const contentType = r.headers.get('content-type') || '';
             if (contentType.includes('application/json')) {
-              return r.json();
+              return (await r.json()) as ExecutiveReportStatusResponse;
             }
             return null;
           })
           .then((data) => {
-            if (data && data.exists) {
+            if (data && data.exists && data.downloadUrl && data.filename) {
               setCachedInfo({
                 filename: data.filename,
                 downloadUrl: getFullUrl(data.downloadUrl),
@@ -97,7 +146,24 @@ export default function ExecutiveReportModal({
     setSuccessResult(null);
 
     try {
-      const payload: Record<string, any> = {
+      const actionPoints: ExecutiveActionPoint[] = (issue?.subtasks || []).map((s) => {
+        const cleanSummary = (s.summary || '').replace(/^\[[^\]]+\]\s*/, '').trim();
+        let owner = s.assignedGroup;
+        if (!owner || owner === '—' || owner === '-') {
+          const matchTeam = cleanSummary.match(/POSTMORTEM\s+([A-Za-z0-9_\-]+)/i);
+          if (matchTeam) {
+            owner = matchTeam[1];
+          }
+        }
+        return {
+          painPoint: s.actionPointType || s.key || 'Acción',
+          description: cleanSummary,
+          owner: owner || '—',
+          forecast: s.status || s.resolutiondate || '—',
+        };
+      });
+
+      const payload: ExecutiveReportRequest = {
         incidentRef,
         title: summary,
         confluenceUrl: confluenceUrl.trim(),
@@ -106,6 +172,10 @@ export default function ExecutiveReportModal({
           incidentRef,
           title: summary,
           sourceUrl: confluenceUrl.trim(),
+          startTime: formattedStartTime,
+          duration: computedDuration,
+          description: issue?.description || '',
+          actionPoints: actionPoints,
           rawContent: mode === 'manual' ? manualText.trim() : undefined,
         },
       };
@@ -116,10 +186,10 @@ export default function ExecutiveReportModal({
         body: JSON.stringify(payload),
       });
 
-      let data: any = null;
+      let data: ExecutiveReportResponse | null = null;
       const contentType = res.headers.get('content-type') || '';
       if (contentType.includes('application/json')) {
-        data = await res.json();
+        data = (await res.json()) as ExecutiveReportResponse;
       } else {
         const text = await res.text();
         throw new Error(`Respuesta no esperada del servidor (${res.status}): ${text.slice(0, 150)}`);
@@ -129,7 +199,7 @@ export default function ExecutiveReportModal({
         throw new Error(data.error || 'Error al generar la presentación PowerPoint');
       }
 
-      const downloadUrl = getFullUrl(data.downloadUrl);
+      const downloadUrl = data.downloadUrl ? getFullUrl(data.downloadUrl) : '';
       const filename = data.filename || `RESUMEN_EJECUTIVO_${incidentRef}.pptx`;
 
       setSuccessResult({
@@ -149,8 +219,9 @@ export default function ExecutiveReportModal({
       downloadLink.click();
       document.body.removeChild(downloadLink);
 
-    } catch (err: any) {
-      setError(err.message || 'Error de comunicación con el servicio de informes');
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : 'Error de comunicación con el servicio de informes';
+      setError(errMsg);
     } finally {
       setLoading(false);
     }
@@ -272,6 +343,39 @@ export default function ExecutiveReportModal({
               {summary}
             </div>
           </div>
+
+          {/* Indicador de datos Jira precargados */}
+          {(formattedStartTime || issue?.description || actionPointsCount > 0) && (
+            <div
+              style={{
+                padding: '10px 14px',
+                background: '#f0f5ff',
+                border: '1px solid #adc6ff',
+                borderRadius: 8,
+                fontSize: 12,
+                color: '#1d39c4',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 4,
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 700 }}>
+                <span>📋</span>
+                <span>Datos precargados desde Jira para la Diapositiva 1:</span>
+              </div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginTop: 2, color: '#2f54eb' }}>
+                {formattedStartTime && (
+                  <span>🕒 Inicio: <strong>{formattedStartTime}</strong>{computedDuration ? ` (${computedDuration})` : ''}</span>
+                )}
+                {issue?.description && (
+                  <span>📄 Descripción técnica lista (impacto, causa y solución)</span>
+                )}
+                {actionPointsCount > 0 && (
+                  <span>📌 <strong>{actionPointsCount}</strong> Puntos de acción (subtareas)</span>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Banner de informe existente en caché */}
           {cachedInfo && !successResult && (
@@ -398,6 +502,25 @@ export default function ExecutiveReportModal({
               <p style={{ margin: '6px 0 0', fontSize: 11.5, color: C.g500 }}>
                 💡 Se utilizará la plantilla oficial Orange con Diapositiva 1 (Resumen, Causas, Acciones) y Diapositivas 2-3 (Cronología).
               </p>
+              <div
+                style={{
+                  marginTop: 10,
+                  padding: '9px 12px',
+                  background: '#fffbe6',
+                  border: '1px solid #ffe58f',
+                  borderRadius: 6,
+                  fontSize: 12,
+                  color: '#ad6800',
+                  lineHeight: 1.45,
+                }}
+              >
+                <div style={{ fontWeight: 600, marginBottom: 2 }}>
+                  ℹ️ Diapositiva 1 lista con datos de Jira
+                </div>
+                <div>
+                  La <strong>Diapositiva 1</strong> (Impacto, Causa, Solución y Puntos de Acción) se rellena automáticamente desde Jira. Si el postmortem de Confluence requiere sesión SSO corporativa en tu navegador y deseas incluir además la <strong>cronología detallada</strong> (Diapositivas 2 y 3), copia el texto de Confluence y pégalo en la pestaña <strong>📝 Pegar Contenido / Texto</strong>.
+                </div>
+              </div>
             </div>
           ) : (
             <div>

@@ -1,13 +1,44 @@
 import { getDashboardStats, DashboardStats } from '@/lib/jira';
 import { NextRequest, NextResponse } from 'next/server';
+import fs from 'fs';
+import path from 'path';
 
 interface CacheEntry {
   data: DashboardStats;
   timestamp: number;
 }
 
-let cachedStats: CacheEntry | null = null;
-const CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutos de caché en memoria
+const CACHE_DIR = path.join(process.cwd(), '.cache');
+const DASHBOARD_CACHE_FILE = path.join(CACHE_DIR, 'dashboard_stats.json');
+const CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutos de caché
+
+function loadPersistentStats(): CacheEntry | null {
+  try {
+    if (fs.existsSync(DASHBOARD_CACHE_FILE)) {
+      const raw = fs.readFileSync(DASHBOARD_CACHE_FILE, 'utf-8');
+      const parsed = JSON.parse(raw);
+      if (parsed && parsed.data && parsed.timestamp) {
+        return parsed as CacheEntry;
+      }
+    }
+  } catch (err) {
+    console.warn('No se pudo cargar la caché de dashboard desde disco:', err);
+  }
+  return null;
+}
+
+function savePersistentStats(entry: CacheEntry) {
+  try {
+    if (!fs.existsSync(CACHE_DIR)) {
+      fs.mkdirSync(CACHE_DIR, { recursive: true });
+    }
+    fs.writeFileSync(DASHBOARD_CACHE_FILE, JSON.stringify(entry), 'utf-8');
+  } catch (err) {
+    console.warn('No se pudo guardar la caché de dashboard en disco:', err);
+  }
+}
+
+let cachedStats: CacheEntry | null = loadPersistentStats();
 
 export async function GET(request: NextRequest) {
   try {
@@ -25,12 +56,15 @@ export async function GET(request: NextRequest) {
     }
 
     const stats = await getDashboardStats();
-    cachedStats = {
-      data: stats,
-      timestamp: now,
-    };
+    if (stats?.issues && stats.issues.length > 0) {
+      cachedStats = {
+        data: stats,
+        timestamp: now,
+      };
+      savePersistentStats(cachedStats);
+    }
 
-    return NextResponse.json(stats, {
+    return NextResponse.json(cachedStats ? cachedStats.data : stats, {
       headers: {
         'Cache-Control': 'no-store, max-age=0',
         'X-Cache': 'MISS',
@@ -38,6 +72,9 @@ export async function GET(request: NextRequest) {
     });
   } catch (error) {
     console.error('Dashboard API error:', error);
+    if (!cachedStats) {
+      cachedStats = loadPersistentStats();
+    }
     if (cachedStats) {
       console.warn('Returning stale cache due to Jira error');
       return NextResponse.json(cachedStats.data, {

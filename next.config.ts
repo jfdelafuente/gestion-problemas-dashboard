@@ -7,7 +7,7 @@ const basePath = process.env.NEXT_PUBLIC_BASE_PATH || "";
 
 const nextConfig: NextConfig = {
   basePath,
-  allowedDevOrigins: ["10.113.151.51"],
+  allowedDevOrigins: ["10.113.151.51", "10.113.189.85"],
 };
 
 export default nextConfig;

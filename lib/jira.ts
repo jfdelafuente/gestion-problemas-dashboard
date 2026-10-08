@@ -1,5 +1,7 @@
 import axios from 'axios';
 import https from 'https';
+import fs from 'fs';
+import path from 'path';
 
 const JIRA_DOMAIN = process.env.NEXT_PUBLIC_JIRA_DOMAIN;
 const JIRA_API_TOKEN = process.env.JIRA_API_TOKEN;
@@ -76,6 +78,7 @@ export interface DashboardIssueRow {
   subtasks: SubtaskRow[];
   wikiPage?: WikiPageLink;
   incidentRef?: string;
+  description?: string;
 }
 
 export interface DashboardStats {
@@ -103,32 +106,44 @@ function extractIncidentRef(description?: string): string | undefined {
   return description?.match(/INC\d{6,}/)?.[0];
 }
 
+interface IncidentInfo {
+  incidentRef?: string;
+  description?: string;
+}
+
 // La Descripción pesa bastante (varios KB por issue) y solo hace falta para
 // extraer el incidente en Postmortems y Problemas, así que se pide aparte —vía
 // key in (...), igual que getSubtaskExtraFields— en vez de en SEARCH_FIELDS,
 // donde se pediría (y pagaría en bytes) para los ~1650 issues del proyecto.
-async function getIncidentRefs(keys: string[]): Promise<Map<string, string>> {
-  const refsByKey = new Map<string, string>();
+async function getIncidentRefs(keys: string[]): Promise<Map<string, IncidentInfo>> {
+  const refsByKey = new Map<string, IncidentInfo>();
+  if (keys.length === 0) return refsByKey;
   const chunkSize = 150;
-
+  const chunks: string[][] = [];
   for (let i = 0; i < keys.length; i += chunkSize) {
-    const chunk = keys.slice(i, i + chunkSize);
-    try {
-      const response = await jiraClient.get('/search', {
-        params: {
-          jql: `key in (${chunk.join(',')})`,
-          maxResults: chunkSize,
-          fields: 'description',
-        },
-      });
-      response.data.issues.forEach((issue: { key: string; fields?: { description?: string } }) => {
-        const ref = extractIncidentRef(issue.fields?.description);
-        if (ref) refsByKey.set(issue.key, ref);
-      });
-    } catch (error) {
-      console.error('Error fetching issue descriptions from Jira:', error);
-    }
+    chunks.push(keys.slice(i, i + chunkSize));
   }
+
+  await Promise.all(
+    chunks.map(async (chunk) => {
+      try {
+        const response = await jiraClient.get('/search', {
+          params: {
+            jql: `key in (${chunk.join(',')})`,
+            maxResults: chunkSize,
+            fields: 'description',
+          },
+        });
+        response.data.issues?.forEach((issue: { key: string; fields?: { description?: string } }) => {
+          const desc = issue.fields?.description;
+          const ref = extractIncidentRef(desc);
+          refsByKey.set(issue.key, { incidentRef: ref, description: desc });
+        });
+      } catch (error) {
+        console.error('Error fetching issue descriptions from Jira:', error);
+      }
+    })
+  );
 
   return refsByKey;
 }
@@ -145,42 +160,48 @@ export interface SubtaskExtraFields {
 // así que campos como el tipo de Action Point, el Grupo Asignado o las fechas hay que pedirlos aparte por clave.
 async function getSubtaskExtraFields(keys: string[]): Promise<Map<string, SubtaskExtraFields>> {
   const extrasByKey = new Map<string, SubtaskExtraFields>();
+  if (keys.length === 0) return extrasByKey;
   const chunkSize = 150;
-
+  const chunks: string[][] = [];
   for (let i = 0; i < keys.length; i += chunkSize) {
-    const chunk = keys.slice(i, i + chunkSize);
-    try {
-      const response = await jiraClient.get('/search', {
-        params: {
-          jql: `key in (${chunk.join(',')})`,
-          maxResults: chunkSize,
-          fields: 'customfield_11955,customfield_10724,customfield_14100,created,resolutiondate',
-        },
-      });
-      response.data.issues.forEach(
-        (issue: {
-          key: string;
-          fields?: {
-            customfield_11955?: { value: string };
-            customfield_10724?: { name: string };
-            customfield_14100?: Array<{ name: string }>;
-            created?: string;
-            resolutiondate?: string;
-          };
-        }) => {
-          extrasByKey.set(issue.key, {
-            actionPointType: issue.fields?.customfield_11955?.value,
-            assignedGroup: issue.fields?.customfield_10724?.name,
-            involvedGroups: issue.fields?.customfield_14100?.map((g) => g.name),
-            created: issue.fields?.created,
-            resolutiondate: issue.fields?.resolutiondate,
-          });
-        }
-      );
-    } catch (error) {
-      console.error('Error fetching subtask extra fields from Jira:', error);
-    }
+    chunks.push(keys.slice(i, i + chunkSize));
   }
+
+  await Promise.all(
+    chunks.map(async (chunk) => {
+      try {
+        const response = await jiraClient.get('/search', {
+          params: {
+            jql: `key in (${chunk.join(',')})`,
+            maxResults: chunkSize,
+            fields: 'customfield_11955,customfield_10724,customfield_14100,created,resolutiondate',
+          },
+        });
+        response.data.issues?.forEach(
+          (issue: {
+            key: string;
+            fields?: {
+              customfield_11955?: { value: string };
+              customfield_10724?: { name: string };
+              customfield_14100?: Array<{ name: string }>;
+              created?: string;
+              resolutiondate?: string;
+            };
+          }) => {
+            extrasByKey.set(issue.key, {
+              actionPointType: issue.fields?.customfield_11955?.value,
+              assignedGroup: issue.fields?.customfield_10724?.name,
+              involvedGroups: issue.fields?.customfield_14100?.map((g) => g.name),
+              created: issue.fields?.created,
+              resolutiondate: issue.fields?.resolutiondate,
+            });
+          }
+        );
+      } catch (error) {
+        console.error('Error fetching subtask extra fields from Jira:', error);
+      }
+    })
+  );
 
   return extrasByKey;
 }
@@ -191,17 +212,44 @@ interface RemoteLink {
   object: { url: string; title: string };
 }
 
-// Una vez que un postmortem tiene su Wiki Page enlazada en Jira, ese enlace no
-// cambia: se cachea en memoria del proceso (vive mientras viva el proceso de
-// pm2) para no volver a pedirlo en cada carga del dashboard. Los postmortems
-// que TODAVÍA no tienen enlace no se cachean como "sin enlace" — son pocos, y
-// así seguimos comprobándolos por si se añade el enlace más adelante.
-const wikiPageCache = new Map<string, WikiPageLink>();
+// Caché persistente en disco para enlaces a Confluence
+const CACHE_DIR = path.join(process.cwd(), '.cache');
+const WIKI_LINKS_CACHE_FILE = path.join(CACHE_DIR, 'jira_wiki_links.json');
+
+function loadWikiPageCache(): Map<string, WikiPageLink> {
+  const map = new Map<string, WikiPageLink>();
+  try {
+    if (fs.existsSync(WIKI_LINKS_CACHE_FILE)) {
+      const data = JSON.parse(fs.readFileSync(WIKI_LINKS_CACHE_FILE, 'utf-8'));
+      for (const [k, v] of Object.entries(data)) {
+        if (v && typeof v === 'object' && 'url' in v && typeof (v as Record<string, unknown>).url === 'string') {
+          map.set(k, v as unknown as WikiPageLink);
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('No se pudo cargar la caché de WikiPageLinks desde disco:', err);
+  }
+  return map;
+}
+
+function saveWikiPageCache(map: Map<string, WikiPageLink>) {
+  try {
+    if (!fs.existsSync(CACHE_DIR)) {
+      fs.mkdirSync(CACHE_DIR, { recursive: true });
+    }
+    const obj = Object.fromEntries(map.entries());
+    fs.writeFileSync(WIKI_LINKS_CACHE_FILE, JSON.stringify(obj, null, 2), 'utf-8');
+  } catch (err) {
+    console.warn('No se pudo guardar la caché de WikiPageLinks en disco:', err);
+  }
+}
+
+const wikiPageCache = loadWikiPageCache();
 
 // La "Wiki Page" de un postmortem no es un campo de Jira: es un remote link a
 // Confluence (relationship "Wiki Page"), y solo se puede pedir issue por issue
-// vía /issue/{key}/remotelink, no en el /search masivo. Se piden en tandas para
-// no lanzar cientos de peticiones a la vez.
+// vía /issue/{key}/remotelink. Se cachean persistentemente para no volver a pedirlas.
 async function getWikiPageLinks(keys: string[]): Promise<Map<string, WikiPageLink>> {
   const linksByKey = new Map<string, WikiPageLink>();
   const keysToFetch: string[] = [];
@@ -215,6 +263,11 @@ async function getWikiPageLinks(keys: string[]): Promise<Map<string, WikiPageLin
     }
   });
 
+  if (keysToFetch.length === 0) {
+    return linksByKey;
+  }
+
+  let hasNewLinks = false;
   const concurrency = 15;
   for (let i = 0; i < keysToFetch.length; i += concurrency) {
     const chunk = keysToFetch.slice(i, i + concurrency);
@@ -229,12 +282,17 @@ async function getWikiPageLinks(keys: string[]): Promise<Map<string, WikiPageLin
             const link = { url: wikiLink.object.url, title: wikiLink.object.title };
             linksByKey.set(key, link);
             wikiPageCache.set(key, link);
+            hasNewLinks = true;
           }
         } catch (error) {
           console.error(`Error fetching remote links for ${key}:`, error);
         }
       })
     );
+  }
+
+  if (hasNewLinks) {
+    saveWikiPageCache(wikiPageCache);
   }
 
   return linksByKey;
@@ -246,21 +304,46 @@ export async function getIssuesByProject(): Promise<JiraIssue[]> {
   const issues: JiraIssue[] = [];
 
   try {
-    let startAt = 0;
-    let total = Infinity;
+    const firstResponse = await jiraClient.get('/search', {
+      params: {
+        jql,
+        startAt: 0,
+        maxResults: pageSize,
+        fields: SEARCH_FIELDS,
+      },
+    });
 
-    while (startAt < total) {
-      const response = await jiraClient.get('/search', {
-        params: {
-          jql,
-          startAt,
-          maxResults: pageSize,
-          fields: SEARCH_FIELDS,
-        },
-      });
-      issues.push(...response.data.issues);
-      total = response.data.total;
-      startAt += pageSize;
+    issues.push(...(firstResponse.data.issues || []));
+    const total = firstResponse.data.total;
+
+    if (total > pageSize) {
+      const offsets: number[] = [];
+      for (let offset = pageSize; offset < total; offset += pageSize) {
+        offsets.push(offset);
+      }
+
+      // Descargamos en lotes concurrentes de 5 peticiones simultáneas
+      const concurrency = 5;
+      for (let i = 0; i < offsets.length; i += concurrency) {
+        const batch = offsets.slice(i, i + concurrency);
+        const batchResults = await Promise.all(
+          batch.map((startAt) =>
+            jiraClient.get('/search', {
+              params: {
+                jql,
+                startAt,
+                maxResults: pageSize,
+                fields: SEARCH_FIELDS,
+              },
+            })
+          )
+        );
+        for (const res of batchResults) {
+          if (res.data.issues) {
+            issues.push(...res.data.issues);
+          }
+        }
+      }
     }
 
     return issues;
@@ -274,12 +357,14 @@ export async function getDashboardStats(): Promise<DashboardStats> {
   const issues = await getIssuesByProject();
 
   const subtaskKeys = issues.flatMap((issue) => issue.fields.subtasks?.map((s) => s.key) || []);
-  const subtaskExtras = await getSubtaskExtraFields(subtaskKeys);
-
   const postmortemKeys = issues.filter((issue) => issue.fields.issuetype.name === 'Postmortem').map((issue) => issue.key);
   const problemaKeys = issues.filter((issue) => issue.fields.issuetype.name === 'Problema').map((issue) => issue.key);
-  const wikiPageLinks = await getWikiPageLinks(postmortemKeys);
-  const incidentRefs = await getIncidentRefs([...postmortemKeys, ...problemaKeys]);
+
+  const [subtaskExtras, wikiPageLinks, incidentRefs] = await Promise.all([
+    getSubtaskExtraFields(subtaskKeys),
+    getWikiPageLinks(postmortemKeys),
+    getIncidentRefs([...postmortemKeys, ...problemaKeys]),
+  ]);
 
   const issueRows: DashboardIssueRow[] = issues
     .map((issue) => ({
@@ -290,7 +375,8 @@ export async function getDashboardStats(): Promise<DashboardStats> {
       type: issue.fields.issuetype.name,
       created: issue.fields.created,
       resolutiondate: issue.fields.resolutiondate,
-      incidentRef: incidentRefs.get(issue.key),
+      incidentRef: incidentRefs.get(issue.key)?.incidentRef,
+      description: incidentRefs.get(issue.key)?.description,
       assignedGroup: issue.fields.customfield_10724?.name || '-',
       involvedGroups: issue.fields.customfield_14100?.map((g) => g.name).join(', ') || '-',
       resolvingGroups: issue.fields.customfield_11907?.map((g) => g.name).join(', ') || '-',
