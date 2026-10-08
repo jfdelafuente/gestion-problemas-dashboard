@@ -90,14 +90,64 @@ propia línea de `@reboot` (ya contemplado más abajo).
 ## Resumen de la topología
 
 - La app se sirve bajo **`/problemas`** (ej. `http://infocodes.si.orange.es:8081/problemas`).
-- Next.js corre como proceso Node normal (`next start`) en el **puerto 3001**,
-  gestionado con **pm2 en modo usuario** (sin `pm2 startup`, que requiere root/systemd).
-- nginx hace de proxy inverso de `/problemas` hacia `localhost:3001`, igual que
-  ya hace con `/api` hacia el backend FastAPI en el `8000`.
-- El puerto 8000 ya está en uso (FastAPI de `cso-incident-masivas-report`) — por
-  eso el 3001. **Verifica que el 3001 esté libre antes de arrancar** (`ss -ltnp | grep 3001` o `netstat -ltnp | grep 3001`).
+- Next.js corre como proceso Node en el **puerto 3001**, gestionado con **pm2 en modo usuario** (sin `pm2 startup`, que requiere root/systemd).
+- nginx hace de proxy inverso de `/problemas` hacia `localhost:3001`, igual que ya hace con `/api` hacia el backend FastAPI en el `8000`.
+- El puerto 8000 ya está en uso (FastAPI de `cso-incident-masivas-report`) — por eso el 3001. **Verifica que el 3001 esté libre antes de arrancar** (`ss -ltnp | grep 3001` o `netstat -ltnp | grep 3001`).
 
-## 3. Copiar el código al servidor
+---
+
+## MÉTODO RECOMENDADO: Despliegue Standalone Precompilado (Cero red y Cero compilación en servidor)
+
+Debido a que el servidor de producción `infocodes` se encuentra tras un proxy corporativo restrictivo que bloquea o agota el tiempo de conexión a `registry.npmjs.org` (`npm error code ETIMEDOUT`), el método recomendado es **precompilar y empaquetar en local** (o en un runner CI) y desplegar el artefacto autónomo de solo **~4 MB**.
+
+### Ventajas:
+1. **Cero `npm ci`**: No requiere descargar dependencias desde el servidor de producción.
+2. **Cero `npm run build`**: No consume CPU ni memoria en el servidor para compilar.
+3. **Despliegues en 5 segundos**: Solo descomprimir y reiniciar PM2.
+4. **Independiente de proxy**: Cero riesgos de fallos de red o problemas TLS.
+
+### Procedimiento:
+
+#### 1. En tu máquina de desarrollo (o CI):
+Genera el paquete standalone listo para producción:
+```powershell
+# En Windows PowerShell:
+.\scripts\build-and-package.ps1
+
+# O mediante npm:
+$env:NEXT_PUBLIC_BASE_PATH="/problemas"
+npm run build:standalone
+npm run package
+```
+Esto genera el archivo comprimido `dist/gestion-problemas-standalone.tar.gz` (~4 MB).
+
+#### 2. Sube el tarball al servidor mediante SCP:
+```bash
+scp dist/gestion-problemas-standalone.tar.gz infocodes@10.132.26.96:/infocodes/project/gestion-problemas-dashboard/
+```
+
+#### 3. En el servidor `infocodes`:
+```bash
+cd /infocodes/project/gestion-problemas-dashboard
+tar -xzf gestion-problemas-standalone.tar.gz
+rm gestion-problemas-standalone.tar.gz
+
+# Si es el primer despliegue:
+npx pm2 start ecosystem.config.js
+npx pm2 save
+
+# Si ya estaba corriendo en PM2:
+npx pm2 restart gestion-problemas-dashboard
+```
+¡Listo! La aplicación arranca directamente vía `node server.js` gestionado por PM2.
+
+---
+
+## MÉTODO ALTERNATIVO (Tradicional): Compilación directa en el servidor
+
+> ⚠️ **Atención**: Este método requiere conexión a `registry.npmjs.org` para `npm ci`. Si falla con `ETIMEDOUT`, utiliza el [Método Recomendado Standalone](#método-recomendado-despliegue-standalone-precompilado-cero-red-y-cero-compilación-en-servidor).
+
+### 3. Copiar el código al servidor
 
 ```bash
 # Ejemplo con git; usa el método que ya uséis para el resto de apps de /infocodes/project

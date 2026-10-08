@@ -6,6 +6,7 @@ import type { NextConfig } from "next";
 const basePath = process.env.NEXT_PUBLIC_BASE_PATH || "";
 
 const nextConfig: NextConfig = {
+  output: "standalone",
   basePath,
   allowedDevOrigins: ["10.113.151.51", "10.113.189.85"],
 };

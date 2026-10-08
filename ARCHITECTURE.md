@@ -305,3 +305,4 @@ Dado que el servidor opera bajo el usuario de sistema `infocodes` sin permisos d
    @reboot cd /infocodes/project/gestion-problemas-dashboard && PATH=/infocodes/nodejs/bin:$PATH npx pm2 resurrect
    ```
 3. **Backend FastAPI**: Se arranca mediante PM2 o script de arranque en segundo plano (`nohup python3 -m uvicorn main:app --host 0.0.0.0 --port 8000 &`).
+
