@@ -18,3 +18,4 @@ else
   pkill -f "node.*server.js" 2>/dev/null || true
 fi
 echo "[OK] Aplicación detenida."
+

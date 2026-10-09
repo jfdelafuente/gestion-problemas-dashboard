@@ -39,6 +39,7 @@ module.exports = {
       env: {
         NODE_ENV: 'production',
         PORT: 3001,
+        HOSTNAME: '0.0.0.0',
         NEXT_PUBLIC_BASE_PATH: '/problemas',
         NEXT_PUBLIC_JIRA_DOMAIN: 'jiranext.masorange.es',
         NEXT_PUBLIC_JIRA_PROJECT_KEY: 'PROB',

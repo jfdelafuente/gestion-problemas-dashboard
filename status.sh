@@ -19,3 +19,4 @@ if [ -f "$LOG_FILE" ]; then
   echo "--- Últimas líneas de app.log ---"
   tail -n 10 "$LOG_FILE" 2>/dev/null
 fi
+

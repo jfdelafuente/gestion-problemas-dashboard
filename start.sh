@@ -22,6 +22,7 @@ fi
 # Variables de entorno por defecto
 export NODE_ENV=production
 export PORT=3001
+export HOSTNAME="0.0.0.0"
 export NEXT_PUBLIC_BASE_PATH=/problemas
 
 nohup node server.js >> "$LOG_FILE" 2>&1 &
@@ -34,3 +35,4 @@ echo "  Puerto:  3001"
 echo "  Log:     $LOG_FILE"
 echo "  URL:     http://infocodes.si.orange.es:8081/problemas"
 echo "=========================================================="
+
