@@ -1,3 +1,5 @@
+'use client';
+
 import React from 'react';
 
 const NAV_ITEMS = [
@@ -13,22 +15,34 @@ export default function MoTopbar({ active = 'problemas' }: { active?: string }) 
   const basePath = process.env.NEXT_PUBLIC_BASE_PATH || '';
 
   return (
-    <div className="mo-topbar">
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={`${basePath}/assets/orange-logo.svg`} alt="Orange" />
-      <div className="mo-topbar-sep" />
+    <header className="mo-topbar" role="banner">
+      <a href="/dashboards/portal/" className="mo-topbar-brand" aria-label="Ir al Portal de Fiabilidad">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={`${basePath}/assets/orange-logo.svg`}
+          onError={(e) => {
+            const target = e.currentTarget;
+            if (target.src !== '/dashboards/assets/orange-logo.svg') {
+              target.src = '/dashboards/assets/orange-logo.svg';
+            }
+          }}
+          alt="Orange"
+        />
+      </a>
+      <div className="mo-topbar-sep" aria-hidden="true" />
       <span className="mo-topbar-dept">Customer &amp; Service Operations</span>
-      <nav className="mo-topbar-nav">
+      <nav className="mo-topbar-nav" aria-label="Navegación principal">
         {NAV_ITEMS.map((item) => (
           <a
             key={item.id}
             href={item.href}
             className={item.id === active ? 'active' : ''}
+            aria-current={item.id === active ? 'page' : undefined}
           >
             {item.label}
           </a>
         ))}
       </nav>
-    </div>
+    </header>
   );
 }

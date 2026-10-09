@@ -49,3 +49,4 @@ else
     echo "[$TIMESTAMP] ✗ ERROR al refrescar la caché: HTTP 3001=$HTTP_CODE, Nginx 8081=$HTTP_CODE_NGINX" >> "$LOG_FILE"
   fi
 fi
+

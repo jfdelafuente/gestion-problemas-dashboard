@@ -143,21 +143,39 @@ select {
   color: #fff;
   display: flex;
   align-items: center;
-  gap: 22px;
-  padding: 0 26px;
-  height: 66px;
+  gap: 20px;
+  padding: 0 24px;
+  height: 64px;
   border-bottom: 1px solid #26241F;
+  box-sizing: border-box;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.mo-topbar::-webkit-scrollbar {
+  display: none;
+}
+
+.mo-topbar-brand {
+  display: flex;
+  align-items: center;
+  text-decoration: none;
+  flex-shrink: 0;
 }
 
 .mo-topbar img {
-  height: 30px;
+  height: 28px;
   width: auto;
+  display: block;
 }
 
 .mo-topbar-sep {
   width: 1px;
   height: 24px;
   background: #33302B;
+  flex-shrink: 0;
 }
 
 .mo-topbar-dept {
@@ -166,12 +184,15 @@ select {
   letter-spacing: .01em;
   color: #9E988E;
   white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .mo-topbar-nav {
   display: flex;
-  gap: 2px;
-  margin-left: 14px;
+  gap: 4px;
+  margin-left: 12px;
+  align-items: center;
+  flex-shrink: 0;
 }
 
 .mo-topbar-nav a {
@@ -182,7 +203,8 @@ select {
   color: #9E988E;
   padding: 8px 14px;
   border-bottom: 2px solid transparent;
-  transition: color .2s ease;
+  transition: color .18s ease, border-color .18s ease;
+  white-space: nowrap;
 }
 
 .mo-topbar-nav a:hover {
@@ -192,6 +214,26 @@ select {
 .mo-topbar-nav a.active {
   color: #FF7900;
   border-bottom-color: #FF7900;
+}
+
+@media (max-width: 900px) {
+  .mo-topbar {
+    padding: 0 16px;
+    gap: 14px;
+  }
+  .mo-topbar-dept {
+    display: none;
+  }
+  .mo-topbar-sep {
+    display: none;
+  }
+  .mo-topbar-nav {
+    margin-left: 0;
+  }
+  .mo-topbar-nav a {
+    padding: 8px 10px;
+    font-size: 13px;
+  }
 }
 
 /* ============================================================
