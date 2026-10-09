@@ -69,3 +69,4 @@ export async function GET() {
     { status: isDegraded ? 200 : 200 }
   );
 }
+
