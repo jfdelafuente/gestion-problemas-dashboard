@@ -131,15 +131,17 @@ scp dist/gestion-problemas-standalone.tar.gz infocodes@10.132.26.96:/infocodes/p
 cd /infocodes/project/gestion-problemas-dashboard
 tar -xzf gestion-problemas-standalone.tar.gz
 rm gestion-problemas-standalone.tar.gz
+chmod +x *.sh
 
-# Si es el primer despliegue:
-npx pm2 start ecosystem.config.js
-npx pm2 save
+# Opción A (Recomendada y 100% autónoma, sin PM2 ni internet):
+./start.sh      # o ./restart.sh para reiniciar
+./status.sh     # verificar PID y últimas líneas de log
 
-# Si ya estaba corriendo en PM2:
-npx pm2 restart gestion-problemas-dashboard
+# Opción B (Si PM2 está instalado globalmente en el sistema - NO uses npx):
+pm2 restart ecosystem.config.js || pm2 start ecosystem.config.js
+pm2 save
 ```
-¡Listo! La aplicación arranca directamente vía `node server.js` gestionado por PM2.
+¡Listo! La aplicación arranca directamente en el puerto 3001 con todas las dependencias y la caché precargada.
 
 ---
 

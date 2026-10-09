@@ -64,5 +64,16 @@ if (fs.existsSync(envExampleSrc)) {
   fs.copyFileSync(envExampleSrc, envExampleDest);
 }
 
+// 6. Copiar scripts de gestión de proceso en segundo plano (no requieren pm2 ni red)
+const controlScripts = ['start.sh', 'stop.sh', 'restart.sh', 'status.sh'];
+for (const scriptName of controlScripts) {
+  const src = path.join(rootDir, scriptName);
+  const dest = path.join(standaloneDir, scriptName);
+  if (fs.existsSync(src)) {
+    fs.copyFileSync(src, dest);
+    console.log(`✓ Copiado ${scriptName} -> .next/standalone/${scriptName}`);
+  }
+}
+
 console.log('[Standalone] ✓ Carpeta .next/standalone lista para ejecución autónoma.');
 
