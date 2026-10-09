@@ -10,9 +10,15 @@ export async function GET(
   try {
     const { slug } = await context.params;
     const subPath = slug.map(encodeURIComponent).join('/');
-    const targetUrl = `${BACKEND_URL}/api/reports/executive-incident/${subPath}`;
+    
+    // Intentar primero endpoint v1 con fallback a legacy si devuelve 404
+    let targetUrl = `${BACKEND_URL}/api/v1/reports/executive-incident/${subPath}`;
+    let resp = await fetch(targetUrl);
 
-    const resp = await fetch(targetUrl);
+    if (resp.status === 404) {
+      targetUrl = `${BACKEND_URL}/api/reports/executive-incident/${subPath}`;
+      resp = await fetch(targetUrl);
+    }
 
     if (slug.length >= 2 && slug[slug.length - 1] === 'status') {
       const contentType = resp.headers.get('content-type') || '';

@@ -17,13 +17,24 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(errResponse, { status: 400 });
     }
 
-    const resp = await fetch(`${BACKEND_URL}/api/reports/executive-incident`, {
+    // Intentar endpoint OpenAPI v1 prioritario con fallback a ruta legacy
+    let resp = await fetch(`${BACKEND_URL}/api/v1/reports/executive-incident`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify(body),
     });
+
+    if (resp.status === 404) {
+      resp = await fetch(`${BACKEND_URL}/api/reports/executive-incident`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(body),
+      });
+    }
 
     const contentType = resp.headers.get('content-type') || '';
     if (contentType.includes('application/json')) {
