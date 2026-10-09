@@ -65,7 +65,7 @@ if (fs.existsSync(envExampleSrc)) {
 }
 
 // 6. Copiar scripts de gestión de proceso en segundo plano (no requieren pm2 ni red)
-const controlScripts = ['start.sh', 'stop.sh', 'restart.sh', 'status.sh'];
+const controlScripts = ['start.sh', 'stop.sh', 'restart.sh', 'status.sh', 'refresh-cache.sh'];
 for (const scriptName of controlScripts) {
   const src = path.join(rootDir, scriptName);
   const dest = path.join(standaloneDir, scriptName);

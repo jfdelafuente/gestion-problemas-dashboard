@@ -488,6 +488,37 @@ git pull
 npm ci
 unset NODE_ENV
 npm run build
-npx pm2 restart gestion-problemas-dashboard
-curl -s -o /dev/null -w "%{http_code}\n" http://localhost:3001/problemas
+
+## Refresco nocturno automático de la caché de Jira (Crontab)
+
+Para mantener los datos y enlaces de Confluence siempre al día sin sobrecargar el servicio en horario laboral, el proyecto incluye el script `refresh-cache.sh`.
+
+El script realiza:
+1. Comprobación del estado del servicio (si está caído lo levanta con `./start.sh`).
+2. Petición a `http://127.0.0.1:3001/problemas/api/dashboard?refresh=true` con timeout de 300s.
+3. Actualización simultánea en memoria y en disco (`.cache/dashboard_stats.json` y `.cache/jira_wiki_links.json`).
+4. Registro de trazas con tiempos de respuesta en `cron.log`.
+
+### Configuración en Crontab (todos los días a las 04:00 AM)
+
+En la terminal del servidor:
+
+```bash
+chmod +x /infocodes/project/gestion-problemas-dashboard/refresh-cache.sh
+
+# Añadir al crontab del usuario infocodes:
+crontab -l 2>/dev/null > /tmp/current_cron
+echo "0 4 * * * /infocodes/project/gestion-problemas-dashboard/refresh-cache.sh >/dev/null 2>&1" >> /tmp/current_cron
+crontab /tmp/current_cron
+rm -f /tmp/current_cron
+```
+
+Para verificar las tareas programadas:
+```bash
+crontab -l
+```
+
+Para consultar el historial de ejecuciones:
+```bash
+cat /infocodes/project/gestion-problemas-dashboard/cron.log
 ```
