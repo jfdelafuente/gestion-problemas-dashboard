@@ -23,8 +23,18 @@ export async function GET(
     if (slug.length >= 2 && slug[slug.length - 1] === 'status') {
       const contentType = resp.headers.get('content-type') || '';
       if (contentType.includes('application/json')) {
-        const data: ExecutiveReportStatusResponse = await resp.json();
-        return NextResponse.json(data, { status: resp.status });
+        const data = await resp.json();
+        const rawDownloadUrl = data.downloadUrl || data.download_url;
+        const normalizedData: ExecutiveReportStatusResponse = {
+          ...data,
+          downloadUrl: rawDownloadUrl,
+          download_url: rawDownloadUrl,
+          incidentRef: data.incidentRef || data.incident_ref,
+          incident_ref: data.incident_ref || data.incidentRef,
+          sizeBytes: data.sizeBytes ?? data.size_bytes,
+          size_bytes: data.size_bytes ?? data.sizeBytes,
+        };
+        return NextResponse.json(normalizedData, { status: resp.status });
       }
       return NextResponse.json({ exists: false, incidentRef: slug[0] }, { status: 200 });
     }
@@ -43,7 +53,7 @@ export async function GET(
     }
 
     const fileBuffer = await resp.arrayBuffer();
-    const contentDisposition = resp.headers.get('content-disposition') || 'attachment; filename="informe.pptx"';
+    const contentDisposition = resp.headers.get('content-disposition') || `attachment; filename="RESUMEN_EJECUTIVO_${slug[0]}.pptx"`;
     const contentType = resp.headers.get('content-type') || 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
 
     return new NextResponse(fileBuffer, {

@@ -42,11 +42,16 @@ export interface ExecutiveReportRequest {
 export interface ExecutiveReportResponse {
   success: boolean;
   incidentRef: string;
+  incident_ref?: string;
   filename?: string;
   downloadUrl?: string;
+  download_url?: string;
   generatedAt?: string;
+  generated_at?: string;
   sizeBytes?: number;
+  size_bytes?: number;
   slideCount?: number;
+  slide_count?: number;
   cached?: boolean;
   error?: string;
   details?: string;
@@ -55,9 +60,13 @@ export interface ExecutiveReportResponse {
 export interface ExecutiveReportStatusResponse {
   exists: boolean;
   incidentRef: string;
+  incident_ref?: string;
   filename?: string;
   downloadUrl?: string;
+  download_url?: string;
   sizeBytes?: number;
+  size_bytes?: number;
   error?: string;
 }
+
 

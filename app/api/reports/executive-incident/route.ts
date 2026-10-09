@@ -38,8 +38,22 @@ export async function POST(request: NextRequest) {
 
     const contentType = resp.headers.get('content-type') || '';
     if (contentType.includes('application/json')) {
-      const data: ExecutiveReportResponse = await resp.json();
-      return NextResponse.json(data, { status: resp.status });
+      const data = await resp.json();
+      const rawDownloadUrl = data.downloadUrl || data.download_url;
+      const normalizedData: ExecutiveReportResponse = {
+        ...data,
+        downloadUrl: rawDownloadUrl,
+        download_url: rawDownloadUrl,
+        incidentRef: data.incidentRef || data.incident_ref,
+        incident_ref: data.incident_ref || data.incidentRef,
+        sizeBytes: data.sizeBytes ?? data.size_bytes,
+        size_bytes: data.size_bytes ?? data.sizeBytes,
+        slideCount: data.slideCount ?? data.slide_count,
+        slide_count: data.slide_count ?? data.slideCount,
+        generatedAt: data.generatedAt || data.generated_at,
+        generated_at: data.generated_at || data.generatedAt,
+      };
+      return NextResponse.json(normalizedData, { status: resp.status });
     }
 
     const text = await resp.text();

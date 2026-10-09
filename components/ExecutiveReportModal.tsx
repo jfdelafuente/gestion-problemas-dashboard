@@ -115,10 +115,11 @@ export default function ExecutiveReportModal({
             return null;
           })
           .then((data) => {
-            if (data && data.exists && data.downloadUrl && data.filename) {
+            const rawUrl = data?.downloadUrl || data?.download_url;
+            if (data && data.exists && rawUrl && data.filename) {
               setCachedInfo({
                 filename: data.filename,
-                downloadUrl: getFullUrl(data.downloadUrl),
+                downloadUrl: getFullUrl(rawUrl),
               });
             }
           })
@@ -199,7 +200,11 @@ export default function ExecutiveReportModal({
         throw new Error(data.error || 'Error al generar la presentación PowerPoint');
       }
 
-      const downloadUrl = data.downloadUrl ? getFullUrl(data.downloadUrl) : '';
+      const rawDownloadUrl = data.downloadUrl || data.download_url;
+      if (!rawDownloadUrl) {
+        throw new Error('El backend generó el informe pero no devolvió la URL de descarga (downloadUrl).');
+      }
+      const downloadUrl = getFullUrl(rawDownloadUrl);
       const filename = data.filename || `RESUMEN_EJECUTIVO_${incidentRef}.pptx`;
 
       setSuccessResult({
