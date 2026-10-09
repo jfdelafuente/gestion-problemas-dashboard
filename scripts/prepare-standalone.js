@@ -42,4 +42,27 @@ if (fs.existsSync(ecosystemSrc)) {
   console.log('✓ Copiado ecosystem.config.js -> .next/standalone/ecosystem.config.js');
 }
 
+// 4. Copiar .cache persistente si existe (para renderizado inmediato de datos sin esperar a Jira)
+const cacheSrc = path.join(rootDir, '.cache');
+const cacheDest = path.join(standaloneDir, '.cache');
+if (fs.existsSync(cacheSrc)) {
+  fs.cpSync(cacheSrc, cacheDest, { recursive: true, force: true });
+  console.log('✓ Copiado .cache/ -> .next/standalone/.cache/ (datos históricos listos)');
+}
+
+// 5. Copiar .env.local si existe para que las credenciales de Jira estén disponibles de inmediato
+const envLocalSrc = path.join(rootDir, '.env.local');
+const envLocalDest = path.join(standaloneDir, '.env.local');
+if (fs.existsSync(envLocalSrc)) {
+  fs.copyFileSync(envLocalSrc, envLocalDest);
+  console.log('✓ Copiado .env.local -> .next/standalone/.env.local (configuración de Jira)');
+}
+
+const envExampleSrc = path.join(rootDir, '.env.example');
+const envExampleDest = path.join(standaloneDir, '.env.example');
+if (fs.existsSync(envExampleSrc)) {
+  fs.copyFileSync(envExampleSrc, envExampleDest);
+}
+
 console.log('[Standalone] ✓ Carpeta .next/standalone lista para ejecución autónoma.');
+

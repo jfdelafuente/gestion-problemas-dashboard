@@ -22,3 +22,4 @@ if ($LASTEXITCODE -ne 0) {
 
 Write-Host ">>> Empaquetando artefacto Standalone..." -ForegroundColor Cyan
 node scripts/package-standalone.js
+

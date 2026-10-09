@@ -3,9 +3,41 @@ import https from 'https';
 import fs from 'fs';
 import path from 'path';
 
-const JIRA_DOMAIN = process.env.NEXT_PUBLIC_JIRA_DOMAIN;
+// Función para asegurar la carga de variables de entorno en standalone si process.env no las tiene
+function ensureEnvLoaded() {
+  if (process.env.JIRA_API_TOKEN && process.env.NEXT_PUBLIC_JIRA_DOMAIN) return;
+  const envFiles = [
+    path.resolve(process.cwd(), '.env.local'),
+    path.resolve(process.cwd(), '.env'),
+  ];
+  for (const envFile of envFiles) {
+    if (fs.existsSync(envFile)) {
+      try {
+        const content = fs.readFileSync(envFile, 'utf-8');
+        for (const line of content.split('\n')) {
+          const trimmed = line.trim();
+          if (!trimmed || trimmed.startsWith('#')) continue;
+          const idx = trimmed.indexOf('=');
+          if (idx !== -1) {
+            const key = trimmed.slice(0, idx).trim();
+            const val = trimmed.slice(idx + 1).trim().replace(/^["']|["']$/g, '');
+            if (!process.env[key]) {
+              process.env[key] = val;
+            }
+          }
+        }
+      } catch (e) {
+        console.warn(`[Jira] Advertencia al leer ${envFile}:`, e);
+      }
+    }
+  }
+}
+
+ensureEnvLoaded();
+
+const JIRA_DOMAIN = process.env.NEXT_PUBLIC_JIRA_DOMAIN || 'jiranext.masorange.es';
 const JIRA_API_TOKEN = process.env.JIRA_API_TOKEN;
-const PROJECT_KEY = process.env.NEXT_PUBLIC_JIRA_PROJECT_KEY;
+const PROJECT_KEY = process.env.NEXT_PUBLIC_JIRA_PROJECT_KEY || 'PROB';
 
 // Para desarrollo con certificados autofirmados
 const httpsAgent = new https.Agent({
@@ -18,6 +50,16 @@ const jiraClient = axios.create({
     Authorization: `Bearer ${JIRA_API_TOKEN || ''}`,
   },
   httpsAgent,
+  timeout: 30000,
+});
+
+// Interceptor para inyectar dinámicamente el token si se actualiza en tiempo de ejecución
+jiraClient.interceptors.request.use((config) => {
+  const currentToken = process.env.JIRA_API_TOKEN || JIRA_API_TOKEN;
+  if (currentToken) {
+    config.headers.Authorization = `Bearer ${currentToken}`;
+  }
+  return config;
 });
 
 export interface JiraIssue {
@@ -299,6 +341,15 @@ async function getWikiPageLinks(keys: string[]): Promise<Map<string, WikiPageLin
 }
 
 export async function getIssuesByProject(): Promise<JiraIssue[]> {
+  const token = process.env.JIRA_API_TOKEN || JIRA_API_TOKEN;
+  if (!token) {
+    console.error(
+      '[Jira API] ADVERTENCIA: JIRA_API_TOKEN no está definido en process.env ni en .env.local. ' +
+      'No se pueden consultar issues frescos de Jira.'
+    );
+    return [];
+  }
+
   const jql = `project = ${PROJECT_KEY} AND "AP Área" = "+O IT"`;
   const pageSize = 100;
   const issues: JiraIssue[] = [];
@@ -347,8 +398,10 @@ export async function getIssuesByProject(): Promise<JiraIssue[]> {
     }
 
     return issues;
-  } catch (error) {
-    console.error('Error fetching issues from Jira:', error);
+  } catch (error: any) {
+    const status = error?.response?.status;
+    const msg = error?.response?.data?.errorMessages || error?.message;
+    console.error(`[Jira API] Error al consultar issues en https://${JIRA_DOMAIN} (Status: ${status || 'N/A'}):`, msg);
     return issues;
   }
 }
