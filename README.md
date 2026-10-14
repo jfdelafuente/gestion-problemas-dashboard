@@ -1,134 +1,161 @@
-# Dashboard de Problemas
+# Dashboard de Gestión de Problemas (CSO / +O IT)
 
-Dashboard de seguimiento de Problemas, Postmortems y Action Points desde Jira (Server / Data Center), con el diseño visual de MASORANGE.
+Dashboard corporativo de seguimiento de **Problemas**, **Postmortems** y **Action Points** desde Jira (Server / Data Center) con generación automatizada de **Informes Ejecutivos en PowerPoint (`.pptx`)** desde Confluence, diseñado bajo la identidad visual de **MASORANGE**.
 
-## Características
+---
 
-- 📑 **4 pestañas**:
-  - **General**: todos los issues (Problema + Postmortem) del periodo
-  - **Postmortem**: KPIs y detalle de postmortems, con sus PM Tasks
-  - **Problema**: KPIs y detalle de problemas, con sus Action Points
-  - **Action Points**: desglose por Grupo Involucrado y tabla filtrable de todos los Action Points
+## Características Principales
 
-- 📊 **KPIs por pestaña**: total, abiertos/pendientes, cerrados/completados y tiempo medio de resolución, cada uno con una variación (`↑`/`↓`) respecto al periodo anterior equivalente.
+- 📑 **4 vistas analíticas especializadas**:
+  - **General**: visión consolidada de todos los issues (*Problema* + *Postmortem*) del periodo.
+  - **Postmortem**: KPIs y tabla detallada de postmortems con sus *PM Tasks* y acceso directo a la documentación en Confluence.
+  - **Problema**: KPIs y desglose de problemas con sus *Action Points* asociados.
+  - **Action Points**: distribución por *Grupo Involucrado* y tabla filtrable de seguimiento.
 
-- 📈 **Gráficos** (SVG a medida, sin librería de gráficos):
-  - Distribución por estado y por prioridad (barra segmentada + leyenda)
-  - Tendencia temporal: entradas vs. resueltas + backlog acumulado
-  - No cerradas por estado + backlog acumulado (Postmortem y Problema)
-  - Action Points por Grupo Involucrado y estado
+- 📊 **KPIs ejecutivos con comparativa temporal**:
+  - Total de registros, abiertos/pendientes, cerrados/completados y tiempo medio de resolución (*MTTR*), cada uno con indicador de variación (`↑` / `↓`) frente al periodo anterior equivalente.
 
-- 🎛️ **Filtros**:
-  - Rango de fechas (7, 30, 90, 365 días), en la cabecera
-  - Búsqueda y filtros por estado/grupo en la tabla de Action Points
-  - Actualización automática cada hora, o manual con el botón "Actualizar"
+- 📈 **Gráficos interactivos SVG a medida** (sin dependencias pesadas):
+  - Distribución por estado y prioridad (barra segmentada + leyenda interactiva).
+  - Evolución temporal: entradas vs. resueltas + curva de backlog acumulado.
+  - Volumen de incidencias no cerradas por estado + backlog acumulado.
+  - Desglose de Action Points por Grupo Involucrado y estado.
+
+- 📑 **Generación Asíncrona de Informes Ejecutivos PowerPoint (`.pptx`)**:
+  - Integración BFF con el motor de reporting `cso-incident-masivas-report` (FastAPI `:8000`).
+  - Extracción automática del postmortem vinculado en **Confluence** (*WikiPageLinks* de Jira) y maquetación en plantilla corporativa PowerPoint.
+  - Cola asíncrona en segundo plano (`HTTP 202 Accepted` + *polling* no bloqueante cada `2.5s`) con barra de progreso en vivo y descarga directa en 1 clic.
+
+- 🛡️ **Alta Disponibilidad, Caché Persistente y Observabilidad**:
+  - **Caché persistente desacoplada** (`/infocodes/var/cache/problemas` en producción, `.cache/` en local) con escrituras atómicas (`.tmp` + `renameSync`) y política *Stale-If-Error* ante caídas o lentitud de Jira.
+  - **Sondas HTTP estándar**: `/api/healthz` (*Liveness*) y `/api/readyz` (*Readiness* con verificación de frescura de caché Jira y conectividad con el backend de reporting).
+  - **Trazabilidad End-to-End (`X-Request-ID`)**: correlación automática de peticiones entre navegador, Next.js BFF y FastAPI.
+
+---
 
 ## Requisitos
 
-- Node.js 18+
-- npm
-- Un Personal Access Token (PAT) de una instancia de Jira Server/Data Center
+- **Node.js** 20 LTS (recomendado) o 18+
+- **npm**
+- **Personal Access Token (PAT)** de Jira Server / Data Center
+- *(Opcional)* Servicio backend `cso-incident-masivas-report` en `:8000` para la generación de presentaciones `.pptx`
 
-## Instalación
+---
 
-1. Clona el repositorio
-2. Instala las dependencias:
+## Instalación y Desarrollo Local
+
+1. **Clonar el repositorio e instalar dependencias**:
    ```bash
    npm install
    ```
-3. Copia `.env.example` a `.env.local` y rellena tus credenciales (ver [SETUP_JIRA.md](SETUP_JIRA.md)):
+
+2. **Configurar variables de entorno**:
+   Copia `.env.example` a `.env.local` y configura tus credenciales de Jira (consulta [SETUP_JIRA.md](SETUP_JIRA.md)):
    ```bash
    cp .env.example .env.local
    ```
-4. Inicia el servidor de desarrollo:
+
+3. **Iniciar el servidor de desarrollo**:
    ```bash
    npm run dev
    ```
-5. Abre [http://localhost:3000](http://localhost:3000)
+   Abre [http://localhost:3000](http://localhost:3000) en el navegador.
 
-## Autenticación con Jira
+---
 
-Esta app está pensada para **Jira Server / Data Center**, no Jira Cloud: usa autenticación `Bearer` con un **Personal Access Token** generado desde el propio Jira (Perfil → Personal Access Tokens), no un API token de `id.atlassian.com`. Detalles paso a paso en [SETUP_JIRA.md](SETUP_JIRA.md).
+## Scripts Disponibles (`package.json`)
 
-## Estructura del proyecto
+| Comando | Descripción |
+| :--- | :--- |
+| `npm run dev` | Inicia el servidor de desarrollo en `http://localhost:3000` |
+| `npm run build` | Compila la aplicación Next.js para producción |
+| `npm run build:standalone` | Valida contratos OpenAPI, compila en modo *Standalone* y filtra exclusivamente los artefactos de runtime |
+| `npm run package` | Genera el paquete autónomo optimizado `dist/gestion-problemas-standalone.tar.gz` (~4 MB) |
+| `npm run check:contracts` | Verifica la sincronización entre `contracts/executive-reports.openapi.json`, `types/executiveReport.ts` y `backend/schemas.py` |
+| `npm run generate:types` | Regenera `types/executiveReport.ts` a partir de la especificación OpenAPI 3.1 |
+| `npm run lint` | Ejecuta el análisis estático con ESLint |
 
-```
+---
+
+## Estructura del Proyecto
+
+```text
 ├── app/
-│   ├── api/dashboard/route.ts     # Único endpoint: agrega y devuelve los datos de Jira
-│   ├── layout.tsx                 # Fuentes (Inter/Roboto Mono) y layout raíz
-│   ├── page.tsx                   # Página principal: estado, filtros, pestañas y composición
-│   └── globals.css                # Tokens de diseño (colores, tipografía) y estilos globales
+│   ├── api/
+│   │   ├── dashboard/route.ts                  # Endpoint BFF de Jira (caché atómica + Stale-If-Error)
+│   │   ├── healthz/route.ts                    # Sonda Liveness (HTTP 200)
+│   │   ├── readyz/route.ts                     # Sonda Readiness (verifica caché Jira + backend :8000)
+│   │   └── reports/executive-incident/         # Proxy BFF hacia FastAPI (:8000) con X-Request-ID
+│   ├── layout.tsx                              # Fuentes corporativas (Inter / Roboto Mono) y layout raíz
+│   ├── page.tsx                                # Vista principal: pestañas, filtros, KPIs y gráficos
+│   └── globals.css                             # Tokens de diseño MASORANGE y estilos globales
 ├── components/
-│   ├── DashboardHeader.tsx        # Cabecera: tabs, selector de periodo, última actualización
-│   ├── KpiCard.tsx                # Tarjeta KPI con pill de variación
-│   ├── StateAndPriorityChart.tsx  # Distribución por estado/prioridad (barra + leyenda)
-│   ├── TimelineChart.tsx          # Entradas/Resueltas/Backlog
-│   ├── OpenByStatusChart.tsx      # No cerradas por estado + backlog
-│   ├── GroupByStatusChart.tsx     # Desglose por grupo (barras horizontales)
-│   ├── IssuesTable.tsx            # Tabla de issues con fila expandible (PM Tasks/Action Points)
-│   ├── ActionPointsTable.tsx      # Tabla filtrable de Action Points
-│   ├── charts/                    # Primitivas de gráfico (SVG bar+line, leyenda, card)
-│   └── ui/Chips.tsx               # Chip de estado, pill de prioridad, enlace de clave
+│   ├── DashboardHeader.tsx                     # Cabecera: navegación por pestañas, filtro temporal y refresco
+│   ├── KpiCard.tsx                             # Tarjeta KPI con indicador de variación porcentual
+│   ├── StateAndPriorityChart.tsx               # Gráfico de distribución por estado y prioridad
+│   ├── TimelineChart.tsx                       # Gráfico combinado Entradas / Resueltas / Backlog
+│   ├── OpenByStatusChart.tsx                   # Gráfico de no cerradas por estado + curva de backlog
+│   ├── GroupByStatusChart.tsx                  # Desglose horizontal por Grupo Involucrado
+│   ├── IssuesTable.tsx                         # Tabla maestra con filas expandibles (PM Tasks / Action Points)
+│   ├── ActionPointsTable.tsx                   # Tabla filtrable de Action Points
+│   ├── ExecutivePowerPointModal.tsx            # Modal de generación/descarga asíncrona de informes .pptx
+│   ├── charts/                                 # Primitivas SVG reutilizables
+│   └── ui/Chips.tsx                            # Badges de estado, prioridad y enlaces a Jira/Confluence
+├── contracts/
+│   └── executive-reports.openapi.json          # Contrato formal OpenAPI 3.1 (BFF <-> Backend CSO)
 ├── lib/
-│   ├── jira.ts                    # Cliente Jira y agregación de datos (getDashboardStats)
-│   └── theme.ts                   # Colores por estado/prioridad, helpers de formato
-├── .env.local                     # Variables de entorno (NO se commitea)
-└── package.json
+│   ├── cache-paths.ts                          # Resolución y migración automática de caché (/infocodes/var/cache/problemas)
+│   ├── jira.ts                                 # Cliente Jira Server/DC, enriquecimiento Confluence y caché atómica
+│   ├── request-id.ts                           # Generación y propagación de X-Request-ID end-to-end
+│   └── theme.ts                                # Paleta corporativa por estado y prioridad
+├── scripts/
+│   ├── deploy-production.ps1                   # Despliegue automatizado 1-clic (SSH/SCP), verificación y rollback
+│   ├── prepare-standalone.js                   # Ensamblado y limpieza estricta de .next/standalone
+│   ├── package-standalone.js                   # Empaquetador de artefacto .tar.gz
+│   └── sync-openapi-types.js                   # Sincronizador y validador OpenAPI <-> TypeScript <-> Pydantic
+├── types/
+│   └── executiveReport.ts                      # Tipos sincronizados para Informes Ejecutivos PowerPoint
+├── start.sh / stop.sh / restart.sh / status.sh # Scripts de operación del servicio en Linux
+├── rollback.sh                                 # Script de reversión atómica (< 1s) a la release previa
+└── refresh-cache.sh                            # Script para forzar la recarga de caché Jira en caliente
 ```
 
-## Cómo funciona
+---
 
-1. `page.tsx` llama a `/api/dashboard?days=N` al cargar y cada vez que cambias el periodo.
-2. El endpoint llama a `getDashboardStats()` en `lib/jira.ts`, que pagina todos los issues del proyecto (filtrados por `"AP Área" = "+O IT"`) y sus subtareas (PM Tasks / Action Points).
-3. El cliente recibe la lista completa de issues y calcula en el navegador las estadísticas, gráficos y deltas de cada pestaña a partir del periodo seleccionado — el servidor no filtra por fecha, solo trae todo.
+## Despliegue en Producción (`infocodes.si.orange.es`)
 
-## Personalización
+La aplicación se despliega en el servidor corporativo `10.132.26.96` (`http://infocodes.si.orange.es:8081/problemas`) mediante **releases atómicas por symlink** (`releases/<timestamp>` $\rightarrow$ `current`) y estado persistente desacoplado en `/infocodes/var/`.
 
-### Cambiar el filtro de issues
+### Comandos rápidos desde Windows (PowerShell)
 
-En `lib/jira.ts`, la consulta JQL está en `getIssuesByProject`:
+```powershell
+# 1. Despliegue estándar (compila paquete de 4 MB, sube por SCP, activa symlink y verifica /api/readyz)
+.\scripts\deploy-production.ps1
 
-```typescript
-const jql = `project = ${PROJECT_KEY} AND "AP Área" = "+O IT"`;
+# 2. Despliegue conjunto Frontend + Backend CSO FastAPI
+.\scripts\deploy-production.ps1 -IncludeBackend
+
+# 3. Desplegar reutilizando el último paquete compilado (en ~12 segundos)
+.\scripts\deploy-production.ps1 -SkipBuild
+
+# 4. Verificar salud de producción sin desplegar
+.\scripts\deploy-production.ps1 -VerifyOnly
+
+# 5. Rollback instantáneo a la release anterior (< 5 segundos)
+.\scripts\deploy-production.ps1 -Rollback
 ```
 
-### Cambiar colores de estado/prioridad
+---
 
-Los mapas de color están en `lib/theme.ts` (`statusColor`, `priorityStyle`). Si aparecen estados de Jira que no estén en el mapa, se les asigna un color determinista de una paleta de reserva.
+## Documentación Técnica y Operativa
 
-## Troubleshooting
+- 🏛️ [**ARCHITECTURE.md**](ARCHITECTURE.md): Diseño detallado de la arquitectura distribuida de 3 servicios, topología de puertos, almacenamiento en `/infocodes/var/`, contratos OpenAPI, matriz RACI y SLOs.
+- 🗺️ [**ARCHITECTURE_ROADMAP.md**](ARCHITECTURE_ROADMAP.md): Hoja de ruta evolutiva (Fases 0 a 3 — **100% Completada**).
+- 🚀 [**DEPLOYMENT.md**](DEPLOYMENT.md): Manual de operación en servidor Linux, comandos de ciclo de vida, rollback y configuración de Nginx.
+- 🔑 [**SETUP_JIRA.md**](SETUP_JIRA.md): Guía paso a paso para generar y configurar el Personal Access Token (PAT) de Jira Server / Data Center.
 
-### Error 403 al consultar Jira
-
-- Confirma que `JIRA_API_TOKEN` es un **Personal Access Token** generado desde tu instancia de Jira, no un token de `id.atlassian.com`.
-- Revisa que el token no haya expirado.
-
-### Sin datos en el dashboard
-
-- Verifica que `NEXT_PUBLIC_JIRA_PROJECT_KEY` sea correcto.
-- Comprueba que hay issues que cumplan el filtro `"AP Área" = "+O IT"` en ese proyecto.
-- Revisa la consola del navegador y los logs del servidor (`npm run dev`) para ver errores de la API de Jira.
-
-## Despliegue
-
-Para el despliegue en el servidor compartido de `infocodes.si.orange.es`
-(nginx propio sin root/systemd, bajo el subpath `/problemas`), ver la guía
-completa en [DEPLOYMENT.md](DEPLOYMENT.md).
-
-### En Vercel
-
-1. Sube el código a GitHub
-2. Crea un proyecto en Vercel conectado a tu repo
-3. Agrega las variables de entorno de `.env.example` en Vercel Settings
-4. Vercel desplegará automáticamente
-
-### En tu servidor
-
-```bash
-npm run build
-npm start
-```
+---
 
 ## Licencia
 
-MIT
+Uso interno corporativo — **MASORANGE (CSO / +O IT)**.
