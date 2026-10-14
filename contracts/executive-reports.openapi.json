@@ -1,0 +1,205 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "CSO Executive Incident Reports API Contract",
+    "version": "2.3.0",
+    "description": "Contrato formal OpenAPI entre gestion-problemas-dashboard (Next.js BFF :3001) y cso-incident-masivas-report (FastAPI :8000)."
+  },
+  "paths": {
+    "/api/v1/reports/executive-incident": {
+      "post": {
+        "operationId": "generateExecutiveIncidentReport",
+        "summary": "Genera (síncrona o asíncronamente con BackgroundTasks) el informe ejecutivo PPTX de una incidencia/problema",
+        "parameters": [
+          {
+            "name": "X-Request-ID",
+            "in": "header",
+            "required": false,
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/ExecutiveReportRequestSchema" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Informe generado o reutilizado de caché inmediatamente",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ExecutiveReportResponseSchema" }
+              }
+            }
+          },
+          "202": {
+            "description": "Generación en segundo plano iniciada (status=PROCESSING)",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ExecutiveReportResponseSchema" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/reports/executive-incident/{incident_ref}/status": {
+      "get": {
+        "operationId": "getExecutiveIncidentReportStatus",
+        "summary": "Consulta el estado del informe en caché o en procesamiento asíncrono",
+        "parameters": [
+          {
+            "name": "incident_ref",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "X-Request-ID",
+            "in": "header",
+            "required": false,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Estado actual del informe (NOT_FOUND | PROCESSING | READY | FAILED)",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ExecutiveReportStatusResponseSchema" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/reports/executive-incident/{incident_ref}": {
+      "get": {
+        "operationId": "downloadExecutiveIncidentReport",
+        "summary": "Descarga el archivo binario .pptx generado en /infocodes/var/storage/executive_pptx",
+        "parameters": [
+          {
+            "name": "incident_ref",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Stream binario PowerPoint (.pptx)"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "ExecutiveReportJobStatus": {
+        "type": "string",
+        "enum": ["NOT_FOUND", "PROCESSING", "READY", "FAILED"]
+      },
+      "ExecutiveActionPointSchema": {
+        "type": "object",
+        "required": ["painPoint", "description", "owner", "forecast"],
+        "properties": {
+          "painPoint": { "type": "string" },
+          "description": { "type": "string" },
+          "owner": { "type": "string" },
+          "forecast": { "type": "string" }
+        }
+      },
+      "ExecutiveTimelineEventSchema": {
+        "type": "object",
+        "required": ["time", "event"],
+        "properties": {
+          "time": { "type": "string" },
+          "event": { "type": "string" }
+        }
+      },
+      "ExecutiveIncidentDataSchema": {
+        "type": "object",
+        "required": ["incidentRef", "title"],
+        "properties": {
+          "incidentRef": { "type": "string" },
+          "title": { "type": "string" },
+          "startTime": { "type": "string", "nullable": true },
+          "duration": { "type": "string", "nullable": true },
+          "impactText": { "type": "string", "nullable": true },
+          "businessImpact": { "type": "string", "nullable": true },
+          "causeText": { "type": "string", "nullable": true },
+          "solutionText": { "type": "string", "nullable": true },
+          "sourceUrl": { "type": "string", "nullable": true },
+          "description": { "type": "string", "nullable": true },
+          "rawContent": { "type": "string", "nullable": true },
+          "actionPoints": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/ExecutiveActionPointSchema" }
+          },
+          "timelineEvents": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/ExecutiveTimelineEventSchema" }
+          }
+        }
+      },
+      "ExecutiveReportRequestSchema": {
+        "type": "object",
+        "required": ["incidentRef"],
+        "properties": {
+          "incidentRef": { "type": "string" },
+          "title": { "type": "string", "nullable": true },
+          "confluenceUrl": { "type": "string", "nullable": true },
+          "force": { "type": "boolean", "default": false },
+          "asyncMode": { "type": "boolean", "default": false },
+          "async_mode": { "type": "boolean", "default": false },
+          "data": { "$ref": "#/components/schemas/ExecutiveIncidentDataSchema", "nullable": true }
+        }
+      },
+      "ExecutiveReportResponseSchema": {
+        "type": "object",
+        "required": ["success", "incidentRef"],
+        "properties": {
+          "success": { "type": "boolean" },
+          "status": { "$ref": "#/components/schemas/ExecutiveReportJobStatus" },
+          "incidentRef": { "type": "string" },
+          "incident_ref": { "type": "string", "nullable": true },
+          "filename": { "type": "string", "nullable": true },
+          "downloadUrl": { "type": "string", "nullable": true },
+          "download_url": { "type": "string", "nullable": true },
+          "generatedAt": { "type": "string", "format": "date-time", "nullable": true },
+          "generated_at": { "type": "string", "format": "date-time", "nullable": true },
+          "sizeBytes": { "type": "integer", "nullable": true },
+          "size_bytes": { "type": "integer", "nullable": true },
+          "slideCount": { "type": "integer", "default": 3, "nullable": true },
+          "slide_count": { "type": "integer", "default": 3, "nullable": true },
+          "cached": { "type": "boolean", "default": false },
+          "requestId": { "type": "string", "nullable": true },
+          "request_id": { "type": "string", "nullable": true },
+          "error": { "type": "string", "nullable": true },
+          "details": { "type": "string", "nullable": true }
+        }
+      },
+      "ExecutiveReportStatusResponseSchema": {
+        "type": "object",
+        "required": ["exists", "incidentRef"],
+        "properties": {
+          "exists": { "type": "boolean" },
+          "status": { "$ref": "#/components/schemas/ExecutiveReportJobStatus" },
+          "incidentRef": { "type": "string" },
+          "incident_ref": { "type": "string", "nullable": true },
+          "filename": { "type": "string", "nullable": true },
+          "downloadUrl": { "type": "string", "nullable": true },
+          "download_url": { "type": "string", "nullable": true },
+          "sizeBytes": { "type": "integer", "nullable": true },
+          "size_bytes": { "type": "integer", "nullable": true },
+          "requestId": { "type": "string", "nullable": true },
+          "request_id": { "type": "string", "nullable": true },
+          "error": { "type": "string", "nullable": true }
+        }
+      }
+    }
+  }
+}

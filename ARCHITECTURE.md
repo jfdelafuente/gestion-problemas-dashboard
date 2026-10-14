@@ -303,17 +303,59 @@ server {
 
 ---
 
-## 7. Gestión de Procesos y Persistencia en Producción
+## 7. Gestión de Procesos, Releases con Symlinks y Persistencia en Producción
 
 Dado que el servidor opera bajo el usuario de sistema `infocodes` sin permisos de `root` ni `systemd`:
-1. **Next.js** se gestiona mediante **PM2 en modo usuario**:
-   ```bash
-   npx pm2 start ecosystem.config.js
-   npx pm2 save
-   ```
-2. **Persistencia tras reinicio de la máquina**: Se configura una entrada en el `crontab` del usuario `infocodes`:
-   ```bash
-   @reboot cd /infocodes/project/gestion-problemas-dashboard && PATH=/infocodes/nodejs/bin:$PATH npx pm2 resurrect
-   ```
-3. **Backend FastAPI**: Se arranca mediante PM2 o script de arranque en segundo plano (`nohup python3 -m uvicorn main:app --host 0.0.0.0 --port 8000 &`).
+1. **Next.js (`:3001`)** se gestiona mediante los scripts autónomos (`./start.sh`, `./stop.sh`, `./restart.sh`, `./status.sh`, `./rollback.sh`) operando sobre el symlink atómico `current -> releases/<YYYYMMDD_HHMMSS>` y leyendo las credenciales compartidas desde `shared/.env.local`.
+2. **Backend FastAPI (`:8000`)** se gestiona mediante `./service.sh {start|stop|restart|status}` con PID en `/infocodes/var/run/cso-backend.pid`.
+3. **Almacenamiento persistente desacoplado (`/infocodes/var/`)**:
+   - `/infocodes/var/cache/problemas/`: `dashboard_stats.json` y `jira_wiki_links.json`.
+   - `/infocodes/var/storage/executive_pptx/`: presentaciones `.pptx` generadas (retención automática de 14 días).
+   - `/infocodes/var/run/`: archivos PID (`gestion-problemas.pid`, `cso-backend.pid`, `infocodes.sock`).
+   - `/infocodes/var/backups/`: instantáneas de rollback (`problemas-rollback.tar.gz`, `cso-backend-rollback/`).
+
+---
+
+## 8. Delimitación de Contratos API y Sincronización Tipada (Fase 3.1 y 3.2)
+
+### 8.1. Frontera de Responsabilidades entre Servicios (Fase 3.1)
+Para evitar duplicidad de lógica y mantener cada servicio enfocado en su dominio:
+- **`gestion-problemas-dashboard` (Next.js 16 BFF en `:3001`)**:
+  - **Único responsable de la integración con Jira (`jiranext.masorange.es`)**, cálculo de KPIs/agregaciones por periodo y gestión de la caché en `/infocodes/var/cache/problemas/` (`GET /problemas/api/dashboard`).
+  - Actúa como **Proxy BFF con trazabilidad `X-Request-ID`** hacia FastAPI para las rutas `/problemas/api/reports/executive-incident/*`.
+- **`cso-incident-masivas-report` (FastAPI en `:8000`)**:
+  - **Único propietario (Single Source of Truth) del motor de informes ejecutivos PowerPoint (`.pptx`)** y del conector/parser de Confluence (`GET/POST /api/v1/reports/executive-incident/*`).
+  - Soporta ejecución síncrona (`200 OK`) y asíncrona mediante `BackgroundTasks` (`202 Accepted` con estado `PROCESSING` -> `READY`).
+
+### 8.2. Sincronización Automática `OpenAPI <-> TypeScript <-> Pydantic` (Fase 3.2)
+El contrato formal entre ambos repositorios reside en [`contracts/executive-reports.openapi.json`](./contracts/executive-reports.openapi.json) y se valida automáticamente en cada compilación (`npm run build:standalone`) mediante [`scripts/sync-openapi-types.js`](./scripts/sync-openapi-types.js):
+- `npm run check:contracts`: Verifica que [`types/executiveReport.ts`](./types/executiveReport.ts) y `cso-incident-masivas-report/backend/schemas.py` coincidan al 100% con el contrato OpenAPI.
+- `npm run generate:types`: Regenera [`types/executiveReport.ts`](./types/executiveReport.ts) directamente desde la especificación OpenAPI.
+
+---
+
+## 9. Matriz de Gobernanza (RACI) y SLAs Operativos (Fase 3.3)
+
+### 9.1. Matriz de Propiedad por Componente (RACI)
+*(**R** = Responsible / Ejecutor, **A** = Accountable / Propietario, **C** = Consulted, **I** = Informed)*
+
+| Componente / Ruta / Recurso | `gestion-problemas-dashboard` | `cso-incident-masivas-report` | `release-dashboard-application` | Infra / Nginx (`:8081`) |
+| :--- | :---: | :---: | :---: | :---: |
+| UI Dashboard y Filtros (`/problemas`) | **R / A** | I | I | C |
+| Ingesta Jira y Caché (`/infocodes/var/cache/problemas`) | **R / A** | I | I | I |
+| Proxy BFF de Informes (`/problemas/api/reports/*`) | **R / A** | C | I | I |
+| Motor PPTX 16:9 y Parser Confluence (`/api/v1/reports/*`) | C | **R / A** | C (Shim) | I |
+| Almacenamiento PPTX (`/infocodes/var/storage/executive_pptx`) | I | **R / A** | I | I |
+| Portal Principal (`/`, `/dashboards`) | I | C | **R / A** | C |
+| Enrutamiento Inverso y `X-Request-ID` (`:8081`) | C | C | C | **R / A** |
+
+### 9.2. Objetivos de Nivel de Servicio (SLAs Internos)
+
+| Operación / Endpoint | Objetivo (SLO) | Mecanismo de Garantía |
+| :--- | :--- | :--- |
+| **Carga inicial del Dashboard** (`GET /problemas/api/dashboard`) | `< 250 ms` (p95) | Lectura directa desde caché precalentada en `/infocodes/var/cache/problemas/dashboard_stats.json` |
+| **Solicitud de Informe Ejecutivo** (`POST /api/reports/executive-incident`) | `< 300 ms` (HTTP `202`) | Encolado asíncrono con `BackgroundTasks` (`status: "PROCESSING"`) + polling ligero cada `1.2s` |
+| **Sondas de Salud** (`/healthz` y `/readyz`) | `< 100 ms` | Verificación sin bloqueo de proceso, memoria, caché en disco y conectividad con FastAPI |
+| **Tiempo de Rollback ante fallo** (`./rollback.sh`) | `< 3 segundos` | Reasignación atómica del symlink `current -> releases/<prev>` y reinicio de proceso Node.js |
+
 

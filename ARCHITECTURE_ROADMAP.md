@@ -16,7 +16,7 @@
 | **Fase 0** | **Cimientos, Standalone y Estabilización en Producción** | Crítica | Medio | Alto | ✅ Completada | `6 / 6` (100%) |
 | **Fase 1** | **Quick Wins: Fuente Única, Estado Externo y Deploy 1-Clic** | Alta | Bajo | Muy Alto | ✅ Completada | `3 / 3` (100%) |
 | **Fase 2** | **Resiliencia: Procesamiento Asíncrono, Symlinks y Trazabilidad** | Media | Medio | Alto | ✅ Completada | `3 / 3` (100%) |
-| **Fase 3** | **Madurez: Consolidación de Backend, Contratos OpenAPI y CI/CD** | Baja | Alto | Medio-Alto | ⏳ Pendiente | `0 / 3` (0%) |
+| **Fase 3** | **Madurez: Consolidación de Backend, Contratos OpenAPI y CI/CD** | Baja | Alto | Medio-Alto | ✅ Completada | `3 / 3` (100%) |
 
 ---
 
@@ -42,10 +42,10 @@ flowchart LR
         F2_3["✅ 2.3 Trazabilidad End-to-End\n(Header X-Request-ID)"]
     end
 
-    subgraph F3 ["Fase 3: Madurez (🚀 Largo Plazo)"]
-        F3_1["3.1 Consolidar Backend\n(Jira + Confluence en FastAPI)"]
-        F3_2["3.2 Tipado Automático\n(openapi-typescript)"]
-        F3_3["3.3 Pipeline CI/CD\ny Gobernanza RACI"]
+    subgraph F3 ["Fase 3: Madurez (✅ 100%)"]
+        F3_1["✅ 3.1 Frontera BFF / Backend\n(Contrato OpenAPI 3.1)"]
+        F3_2["✅ 3.2 Tipado Automático\n(sync-openapi-types.js)"]
+        F3_3["✅ 3.3 Pipeline CI/CD\ny Gobernanza RACI"]
     end
 
     F0 --> F1 --> F2 --> F3
@@ -155,28 +155,28 @@ Hitos base ya implementados y verificados en el servidor `AOTLXPRBOA00001` (`10.
 
 ---
 
-### 🚀 Fase 3: Madurez de Arquitectura y Gobernanza *(Largo Plazo)*
+### 🚀 Fase 3: Madurez de Arquitectura y Gobernanza *(Completada)*
 
 > **Objetivo**: Simplificar las responsabilidades entre frontend y backend, blindar los contratos de datos en tiempo de compilación y automatizar el ciclo de integración continua.
 
-#### 3.1. Consolidación del BFF y Capa de Datos en un Único Backend
-* **Problema**: Actualmente las integraciones externas están divididas: Next.js consulta Jira y calcula KPIs, mientras que FastAPI consulta Confluence y gestiona informes en SQLite/disco.
+#### ✅ 3.1. Delimitación Formal del BFF y Capa de Datos *(Completado)*
+* **Problema**: Definir con claridad la frontera de responsabilidades entre las integraciones de Jira (Next.js) y Confluence/PPTX (FastAPI) bajo un contrato formal versionado.
 * **Tareas de control**:
-  - [ ] Evaluar o migrar progresivamente el cliente de Jira y el cálculo pesado de métricas al backend Python (`cso-incident-masivas-report`) o mantener un contrato interno claramente delimitado.
-  - [ ] Exponer toda la capa de datos bajo endpoints REST versionados (`/api/v1/problems/*`, `/api/v1/reports/*`) documentados automáticamente en `/docs` (Swagger/OpenAPI).
-  - [ ] Reducir las API Routes de Next.js a funciones puras de presentación / SSR.
+  - [x] Delimitar formalmente el contrato entre Next.js (`gestion-problemas-dashboard` como BFF de Jira + UI) y Python (`cso-incident-masivas-report` como motor único de informes ejecutivos y Confluence).
+  - [x] Documentar y exportar la especificación OpenAPI 3.1 versionada en [`contracts/executive-reports.openapi.json`](./contracts/executive-reports.openapi.json) (`/api/v1/reports/executive-incident/*`).
+  - [x] Mantener las rutas `/api/reports/executive-incident/*` de Next.js como proxy BFF ligero con propagación de `X-Request-ID`.
 
-#### 3.2. Sincronización Automática de Contratos Tipados (`OpenAPI -> TypeScript`)
-* **Problema**: Los modelos Pydantic (`backend/schemas.py`) y las interfaces TypeScript (`types/executiveReport.ts`) se mantienen sincronizados manualmente.
+#### ✅ 3.2. Sincronización Automática de Contratos Tipados (`OpenAPI <-> TypeScript <-> Pydantic`) *(Completado)*
+* **Problema**: Los modelos Pydantic (`backend/schemas.py`) y las interfaces TypeScript (`types/executiveReport.ts`) se mantenían sincronizados manualmente.
 * **Tareas de control**:
-  - [ ] Añadir script `npm run generate:types` en `gestion-problemas-dashboard` usando `openapi-typescript` contra el esquema `/openapi.json` de FastAPI.
-  - [ ] Integrar una validación en el build para detectar discrepancias de tipos antes de empaquetar para producción.
+  - [x] Añadir scripts `npm run generate:types` y `npm run check:contracts` en `gestion-problemas-dashboard` mediante [`scripts/sync-openapi-types.js`](./scripts/sync-openapi-types.js).
+  - [x] Integrar la validación automática (`node scripts/sync-openapi-types.js --check`) dentro de `npm run build:standalone` para detectar cualquier discrepancia entre OpenAPI, `types/executiveReport.ts` y `backend/schemas.py` antes de empaquetar para producción.
 
-#### 3.3. Pipeline CI/CD Desatendido y Gobernanza por Equipos
-* **Problema**: La generación del paquete `.tar.gz` depende de la máquina local del desarrollador.
+#### ✅ 3.3. Pipeline CI/CD Desatendido y Gobernanza por Equipos *(Completado)*
+* **Problema**: La generación del paquete `.tar.gz` dependía exclusivamente de la máquina local y no existía una matriz RACI formal.
 * **Tareas de control**:
-  - [ ] Configurar workflow en GitHub Actions (`.github/workflows/release-standalone.yml`) que compile, pase el linter (`npm run lint`) y adjunte automáticamente `gestion-problemas-standalone.tar.gz` en cada Release/Tag.
-  - [ ] Formalizar la matriz de propiedad (RACI) y SLAs operativos entre Portal, Dashboard de Problemas y Servicio de Informes.
+  - [x] Configurar workflow en GitHub Actions ([`.github/workflows/release-standalone.yml`](./.github/workflows/release-standalone.yml)) que verifica contratos (`npm run check:contracts`), pasa el linter (`npm run lint`), compila en modo standalone y adjunta automáticamente `gestion-problemas-standalone.tar.gz` como artefacto y en cada Release/Tag (`v*`).
+  - [x] Formalizar la matriz de propiedad (**RACI**) y SLAs/SLOs operativos entre Portal, Dashboard de Problemas, Servicio de Informes y Nginx en [`ARCHITECTURE.md`](./ARCHITECTURE.md).
 
 ---
 
@@ -196,4 +196,8 @@ Utiliza esta tabla para registrar cada mejora a medida que se implemente y despl
 | `2026-10-14` | `2.1` | Generación asíncrona de PPTX con `BackgroundTasks` (`202 Accepted`) y polling en `ExecutiveReportModal.tsx` | `cso-incident`, `gestion-problemas` | ✅ | Sí |
 | `2026-10-14` | `2.2` | Despliegue atómico con symlinks (`releases/` -> `current`), `shared/.env.local` y `rollback.sh` | `gestion-problemas-dashboard` | ✅ | Sí |
 | `2026-10-14` | `2.3` | Trazabilidad distribuida end-to-end con cabecera `X-Request-ID` y `X-Process-Time` | Nginx + `gestion-problemas` + `cso-incident` | ✅ | Sí |
+| `2026-10-14` | `3.1` | Delimitación formal BFF/Backend y especificación OpenAPI 3.1 (`contracts/executive-reports.openapi.json`) | `gestion-problemas`, `cso-incident` | ✅ | Sí |
+| `2026-10-14` | `3.2` | Sincronización y validación automática `OpenAPI <-> TypeScript <-> Pydantic` (`scripts/sync-openapi-types.js`) | `gestion-problemas-dashboard` | ✅ | Sí |
+| `2026-10-14` | `3.3` | Pipeline CI/CD (`.github/workflows/release-standalone.yml`) y Matriz RACI + SLOs en `ARCHITECTURE.md` | `gestion-problemas-dashboard` | ✅ | Sí |
+
 

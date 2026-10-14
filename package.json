@@ -5,7 +5,9 @@
   "scripts": {
     "dev": "next dev -p 3001",
     "build": "next build",
-    "build:standalone": "next build && node scripts/prepare-standalone.js",
+    "generate:types": "node scripts/sync-openapi-types.js",
+    "check:contracts": "node scripts/sync-openapi-types.js --check",
+    "build:standalone": "node scripts/sync-openapi-types.js --check && next build && node scripts/prepare-standalone.js",
     "package": "node scripts/package-standalone.js",
     "deploy": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/deploy-production.ps1",
     "deploy:prod": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/deploy-production.ps1",

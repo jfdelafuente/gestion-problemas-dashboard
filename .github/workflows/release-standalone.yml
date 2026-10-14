@@ -1,0 +1,60 @@
+name: Build & Package Standalone Release
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - 'v*'
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+env:
+  NODE_ENV: production
+  NEXT_PUBLIC_BASE_PATH: /problemas
+
+jobs:
+  build-standalone:
+    name: Validate Contracts, Build Standalone & Package (.tar.gz)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20 LTS
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies (clean CI)
+        run: npm ci
+
+      - name: Verify OpenAPI <-> TypeScript contracts (Fase 3.2)
+        run: npm run check:contracts
+
+      - name: Run ESLint
+        run: npm run lint
+
+      - name: Build Next.js Standalone & Prepare Bundle
+        run: npm run build:standalone
+
+      - name: Package Standalone Tarball (dist/gestion-problemas-standalone.tar.gz)
+        run: npm run package
+
+      - name: Upload Standalone Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: gestion-problemas-standalone
+          path: dist/gestion-problemas-standalone.tar.gz
+          retention-days: 30
+
+      - name: Attach Tarball to GitHub Release (on tag push v*)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/gestion-problemas-standalone.tar.gz
+          generate_release_notes: true
