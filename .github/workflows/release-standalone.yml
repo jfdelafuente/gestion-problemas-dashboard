@@ -58,3 +58,4 @@ jobs:
         with:
           files: dist/gestion-problemas-standalone.tar.gz
           generate_release_notes: true
+
