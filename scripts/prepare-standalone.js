@@ -75,5 +75,33 @@ for (const scriptName of controlScripts) {
   }
 }
 
-console.log('[Standalone] ✓ Carpeta .next/standalone lista para ejecución autónoma.');
+// 7. Limpiar cualquier archivo o carpeta de código fuente/desarrollo que Next.js NFT haya trazado accidentalmente
+//    En producción solo deben existir los artefactos estrictamente necesarios en tiempo de ejecución.
+const allowedRuntimeEntries = new Set([
+  'server.js',
+  'package.json',
+  '.next',
+  'node_modules',
+  'public',
+  '.cache',
+  '.env.local',
+  '.env.example',
+  'ecosystem.config.js',
+  ...controlScripts,
+]);
+
+let removedCount = 0;
+for (const entry of fs.readdirSync(standaloneDir)) {
+  if (!allowedRuntimeEntries.has(entry)) {
+    const fullPath = path.join(standaloneDir, entry);
+    fs.rmSync(fullPath, { recursive: true, force: true });
+    removedCount++;
+  }
+}
+if (removedCount > 0) {
+  console.log(`✓ Limpiados ${removedCount} elementos de desarrollo/código fuente innecesarios en .next/standalone/`);
+}
+
+console.log('[Standalone] ✓ Carpeta .next/standalone optimizada y lista para ejecución autónoma.');
+
 

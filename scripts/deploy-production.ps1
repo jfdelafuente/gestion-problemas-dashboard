@@ -407,17 +407,45 @@ cd "$REMOTE_DIR"
 sed -i 's/\r$//' *.sh 2>/dev/null || true
 chmod +x *.sh 2>/dev/null || true
 
-# 8. Reiniciar servicio (toma inmediatamente current/)
+# 8. Limpiar archivos residuales del antiguo despliegue plano en el directorio raiz ($REMOTE_DIR)
+#    Solo deben quedar en raiz: current, releases, shared, app.log y los scripts de control
+if [ -L "$CURRENT_LINK" ]; then
+    for entry in $(ls -A "$REMOTE_DIR"); do
+        case "$entry" in
+            current|releases|shared|app.log|start.sh|stop.sh|restart.sh|status.sh|refresh-cache.sh|rollback.sh|ecosystem.config.js)
+                ;;
+            *)
+                rm -rf "$REMOTE_DIR/$entry" 2>/dev/null || true
+                echo "--> [Remoto] Limpiado elemento residual en raiz: $entry"
+                ;;
+        esac
+    done
+fi
+
+# 9. Reiniciar servicio (toma inmediatamente current/)
 echo "--> [Remoto] Reiniciando servicio Dashboard..."
 ./restart.sh
 
-# 9. Limpiar releases antiguas (conservar las ultimas 5 releases para rollback instantaneo)
+# 10. Limpiar releases antiguas (conservar las ultimas 3 releases para rollback instantaneo) y purgar archivos de codigo fuente en releases previas
 if [ -d "$RELEASES_DIR" ]; then
-    OLD_RELEASES=$(ls -1 "$RELEASES_DIR" 2>/dev/null | sort | head -n -5 || true)
+    OLD_RELEASES=$(ls -1 "$RELEASES_DIR" 2>/dev/null | sort | head -n -3 || true)
     for old_rel in $OLD_RELEASES; do
         if [ -n "$old_rel" ] && [ "$old_rel" != "$RELEASE_ID" ]; then
             rm -rf "$RELEASES_DIR/$old_rel" 2>/dev/null || true
         fi
+    done
+
+    for rel_dir in "$RELEASES_DIR"/*; do
+        [ -d "$rel_dir" ] || continue
+        for item in $(ls -A "$rel_dir"); do
+            case "$item" in
+                server.js|package.json|.next|node_modules|public|.cache|.env.local|.env.production.local|.env.example|ecosystem.config.js|start.sh|stop.sh|restart.sh|status.sh|refresh-cache.sh|rollback.sh)
+                    ;;
+                *)
+                    rm -rf "$rel_dir/$item" 2>/dev/null || true
+                    ;;
+            esac
+        done
     done
 fi
 

@@ -14,12 +14,13 @@ let migrationExecuted = false;
  * 3. En desarrollo local: <process.cwd()>/.cache
  */
 export function getCacheDir(): string {
-  const localCacheDir = path.join(/*turbopackIgnore: true*/ process.cwd(), '.cache');
+  const cwd = /*turbopackIgnore: true*/ process.cwd();
+  const localCacheDir = path.join(/*turbopackIgnore: true*/ cwd, '.cache');
 
   let targetDir: string;
   if (process.env.CACHE_DIR && process.env.CACHE_DIR.trim() !== '') {
     targetDir = path.resolve(/*turbopackIgnore: true*/ process.env.CACHE_DIR.trim());
-  } else if (process.platform !== 'win32' && fs.existsSync('/infocodes')) {
+  } else if (process.platform !== 'win32' && fs.existsSync(/*turbopackIgnore: true*/ '/infocodes')) {
     targetDir = DEFAULT_PROD_CACHE_DIR;
   } else {
     targetDir = localCacheDir;
@@ -27,10 +28,13 @@ export function getCacheDir(): string {
 
   // Asegurar que el directorio existe y migrar ficheros desde .cache/ local si aplica
   try {
-    if (!fs.existsSync(targetDir)) {
-      fs.mkdirSync(targetDir, { recursive: true });
+    if (!fs.existsSync(/*turbopackIgnore: true*/ targetDir)) {
+      fs.mkdirSync(/*turbopackIgnore: true*/ targetDir, { recursive: true });
     }
-    if (!migrationExecuted && path.resolve(targetDir) !== path.resolve(localCacheDir)) {
+    if (
+      !migrationExecuted &&
+      path.resolve(/*turbopackIgnore: true*/ targetDir) !== path.resolve(/*turbopackIgnore: true*/ localCacheDir)
+    ) {
       migrationExecuted = true;
       migrateCacheFilesIfNeeded(localCacheDir, targetDir);
     }
@@ -48,24 +52,24 @@ export function getCacheDir(): string {
  * copia los archivos sin pérdida de datos.
  */
 function migrateCacheFilesIfNeeded(sourceDir: string, targetDir: string): void {
-  if (!fs.existsSync(sourceDir)) return;
+  if (!fs.existsSync(/*turbopackIgnore: true*/ sourceDir)) return;
 
   const filesToMigrate = ['dashboard_stats.json', 'jira_wiki_links.json'];
   for (const fileName of filesToMigrate) {
-    const srcFile = path.join(sourceDir, fileName);
-    const destFile = path.join(targetDir, fileName);
+    const srcFile = path.join(/*turbopackIgnore: true*/ sourceDir, fileName);
+    const destFile = path.join(/*turbopackIgnore: true*/ targetDir, fileName);
     try {
-      if (!fs.existsSync(srcFile)) continue;
+      if (!fs.existsSync(/*turbopackIgnore: true*/ srcFile)) continue;
 
-      if (!fs.existsSync(destFile)) {
-        fs.copyFileSync(srcFile, destFile);
+      if (!fs.existsSync(/*turbopackIgnore: true*/ destFile)) {
+        fs.copyFileSync(/*turbopackIgnore: true*/ srcFile, /*turbopackIgnore: true*/ destFile);
         console.log(`[CachePaths] Migrado ${fileName} -> ${destFile}`);
       } else {
         // Si ambos existen, conservar el más reciente o reparar si el destino está vacío/corrupto (<100 bytes)
-        const srcStat = fs.statSync(srcFile);
-        const destStat = fs.statSync(destFile);
+        const srcStat = fs.statSync(/*turbopackIgnore: true*/ srcFile);
+        const destStat = fs.statSync(/*turbopackIgnore: true*/ destFile);
         if ((destStat.size < 100 || srcStat.mtimeMs > destStat.mtimeMs) && srcStat.size > 100) {
-          fs.copyFileSync(srcFile, destFile);
+          fs.copyFileSync(/*turbopackIgnore: true*/ srcFile, /*turbopackIgnore: true*/ destFile);
           console.log(`[CachePaths] Actualizado/reparado ${fileName} en ${destFile} (${srcStat.size} bytes)`);
         }
       }
@@ -76,12 +80,13 @@ function migrateCacheFilesIfNeeded(sourceDir: string, targetDir: string): void {
 }
 
 export function getDashboardCacheFile(): string {
-  return path.join(getCacheDir(), 'dashboard_stats.json');
+  return path.join(/*turbopackIgnore: true*/ getCacheDir(), 'dashboard_stats.json');
 }
 
 export function getWikiLinksCacheFile(): string {
-  return path.join(getCacheDir(), 'jira_wiki_links.json');
+  return path.join(/*turbopackIgnore: true*/ getCacheDir(), 'jira_wiki_links.json');
 }
 
 export { DEFAULT_PROD_VAR_DIR, DEFAULT_PROD_CACHE_DIR };
+
 
