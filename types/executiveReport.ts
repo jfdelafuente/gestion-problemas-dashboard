@@ -31,16 +31,21 @@ export interface ExecutiveIncidentData {
   timelineEvents?: ExecutiveTimelineEvent[];
 }
 
+export type ExecutiveReportJobStatus = 'NOT_FOUND' | 'PROCESSING' | 'READY' | 'FAILED';
+
 export interface ExecutiveReportRequest {
   incidentRef: string;
   title?: string;
   confluenceUrl?: string;
   force?: boolean;
+  asyncMode?: boolean;
+  async_mode?: boolean;
   data?: ExecutiveIncidentData;
 }
 
 export interface ExecutiveReportResponse {
   success: boolean;
+  status?: ExecutiveReportJobStatus;
   incidentRef: string;
   incident_ref?: string;
   filename?: string;
@@ -53,12 +58,15 @@ export interface ExecutiveReportResponse {
   slideCount?: number;
   slide_count?: number;
   cached?: boolean;
+  requestId?: string;
+  request_id?: string;
   error?: string;
   details?: string;
 }
 
 export interface ExecutiveReportStatusResponse {
   exists: boolean;
+  status?: ExecutiveReportJobStatus;
   incidentRef: string;
   incident_ref?: string;
   filename?: string;
@@ -66,7 +74,7 @@ export interface ExecutiveReportStatusResponse {
   download_url?: string;
   sizeBytes?: number;
   size_bytes?: number;
+  requestId?: string;
+  request_id?: string;
   error?: string;
 }
-
-

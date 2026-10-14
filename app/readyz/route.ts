@@ -1,33 +1,35 @@
 import { NextResponse } from 'next/server';
 import fs from 'fs';
-import path from 'path';
+import { getCacheDir, getDashboardCacheFile } from '@/lib/cache-paths';
 
 const BACKEND_URL = process.env.BACKEND_REPORTS_URL || 'http://localhost:8000';
-const CACHE_FILE = path.join(process.cwd(), '.cache', 'dashboard_stats.json');
 
 export async function GET() {
   const checks: Record<string, { status: 'ok' | 'degraded' | 'unavailable'; message?: string; details?: unknown }> = {};
 
-  // 1. Comprobar caché local de Jira
+  // 1. Comprobar caché persistente de Jira
   try {
-    if (fs.existsSync(CACHE_FILE)) {
-      const stats = fs.statSync(CACHE_FILE);
+    const cacheDir = getCacheDir();
+    const cacheFile = getDashboardCacheFile();
+    if (fs.existsSync(cacheFile)) {
+      const stats = fs.statSync(cacheFile);
       const ageMinutes = Math.round((Date.now() - stats.mtimeMs) / (1000 * 60));
       checks.jiraCache = {
         status: 'ok',
-        message: `Caché disponible (${(stats.size / 1024).toFixed(1)} KB, actualizada hace ${ageMinutes} min)`,
-        details: { sizeBytes: stats.size, ageMinutes, mtime: stats.mtime.toISOString() },
+        message: `Caché disponible en ${cacheDir} (${(stats.size / 1024).toFixed(1)} KB, actualizada hace ${ageMinutes} min)`,
+        details: { cacheDir, sizeBytes: stats.size, ageMinutes, mtime: stats.mtime.toISOString() },
       };
     } else {
       checks.jiraCache = {
         status: 'degraded',
-        message: 'No existe archivo de caché local aún (se creará en la primera consulta exitosa a Jira)',
+        message: `No existe archivo de caché aún en ${cacheDir} (se creará en la primera consulta exitosa a Jira)`,
+        details: { cacheDir },
       };
     }
   } catch (err) {
     checks.jiraCache = {
       status: 'degraded',
-      message: `Error accediendo a caché local: ${err instanceof Error ? err.message : String(err)}`,
+      message: `Error accediendo a caché: ${err instanceof Error ? err.message : String(err)}`,
     };
   }
 

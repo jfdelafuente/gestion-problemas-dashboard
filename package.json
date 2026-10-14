@@ -7,6 +7,10 @@
     "build": "next build",
     "build:standalone": "next build && node scripts/prepare-standalone.js",
     "package": "node scripts/package-standalone.js",
+    "deploy": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/deploy-production.ps1",
+    "deploy:prod": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/deploy-production.ps1",
+    "deploy:fast": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/deploy-production.ps1 -SkipBuild",
+    "deploy:rollback": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/deploy-production.ps1 -Rollback",
     "start": "next start -p 3001",
     "lint": "eslint"
   },

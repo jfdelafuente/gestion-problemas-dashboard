@@ -4,28 +4,22 @@ Guía para desplegar el **Dashboard de Gestión de Problemas** en `10.132.26.96:
 (`infocodes.si.orange.es`), un nginx compartido con otras aplicaciones que corre
 como usuario `infocodes` (uid 2001), sin root ni systemd.
 
-Todos los comandos de este documento se ejecutan **en el servidor**, conectado
-como el usuario `infocodes`. No hay ningún paso automatizable desde fuera del
-servidor: no hay acceso SSH configurado desde este entorno de desarrollo.
+El despliegue está **totalmente automatizado desde Windows PowerShell** mediante [`scripts/deploy-production.ps1`](scripts/deploy-production.ps1) (y [`scripts/setup-ssh-key.ps1`](scripts/setup-ssh-key.ps1) para autenticación SSH sin contraseña). También se documenta más abajo el procedimiento manual en el servidor por si se necesita operar directamente en `infocodes`.
 
 ## Índice
 
-1. [Prerrequisitos](#1-prerrequisitos)
+1. [Despliegue en 1 Clic desde PowerShell (Método Recomendado)](#método-recomendado-despliegue-standalone-precompilado-y-automatización-en-1-clic)
+   - [Configurar clave SSH sin contraseña (una sola vez)](#configurar-clave-ssh-sin-contraseña-una-sola-vez)
+   - [Comandos de despliegue, verificación y rollback](#opción-rápida-despliegue-en-1-clic-desde-powershell-deploy-productionps1)
+   - [Arquitectura de estado persistente (`/infocodes/var/`)](#arquitectura-de-estado-persistente-infocodesvar)
+2. [Prerrequisitos del servidor](#1-prerrequisitos)
    - [Instalar Node.js si no está disponible](#instalar-nodejs-si-no-está-disponible)
-2. [Resumen de la topología](#resumen-de-la-topología)
-3. [Copiar el código al servidor](#3-copiar-el-código-al-servidor)
-4. [Instalar dependencias](#4-instalar-dependencias)
-5. [Configurar credenciales de Jira](#5-configurar-credenciales-de-jira-producción)
-6. [Configurar el subpath `/problemas`](#6-configurar-el-subpath-problemas)
-7. [Compilar](#7-compilar)
-8. [Arrancar con pm2](#8-arrancar-con-pm2)
-9. [Aplicar el bloque de nginx](#9-aplicar-el-bloque-de-nginx)
-10. [Verificar](#10-verificar)
-11. [Redespliegues posteriores](#redespliegues-posteriores)
-12. [Rollback](#rollback)
-13. [Notas](#notas)
-14. [Solución de problemas](#solución-de-problemas)
-15. [Referencia rápida](#referencia-rápida)
+3. [Resumen de la topología](#resumen-de-la-topología)
+4. [Método Alternativo (Tradicional en servidor)](#método-alternativo-tradicional-compilación-directa-en-el-servidor)
+5. [Aplicar el bloque de nginx](#9-aplicar-el-bloque-de-nginx)
+6. [Rollback](#rollback)
+7. [Solución de problemas](#solución-de-problemas)
+8. [Refresco nocturno automático de la caché de Jira (Crontab)](#refresco-nocturno-automático-de-la-caché-de-jira-crontab)
 
 ## 1. Prerrequisitos
 
@@ -90,23 +84,81 @@ propia línea de `@reboot` (ya contemplado más abajo).
 ## Resumen de la topología
 
 - La app se sirve bajo **`/problemas`** (ej. `http://infocodes.si.orange.es:8081/problemas`).
-- Next.js corre como proceso Node en el **puerto 3001**, gestionado con **pm2 en modo usuario** (sin `pm2 startup`, que requiere root/systemd).
-- nginx hace de proxy inverso de `/problemas` hacia `localhost:3001`, igual que ya hace con `/api` hacia el backend FastAPI en el `8000`.
-- El puerto 8000 ya está en uso (FastAPI de `cso-incident-masivas-report`) — por eso el 3001. **Verifica que el 3001 esté libre antes de arrancar** (`ss -ltnp | grep 3001` o `netstat -ltnp | grep 3001`).
+- Next.js corre como proceso Node standalone (`server.js`) en el **puerto 3001**, gestionado autónomamente mediante `./start.sh`, `./stop.sh`, `./restart.sh` y `./status.sh` con PID file en `/infocodes/var/run/gestion-problemas.pid` (o alternativamente con pm2).
+- nginx hace de proxy inverso de `/problemas` hacia `localhost:3001`, igual que ya hace con `/api` hacia el backend FastAPI en el `8000` (`cso-incident-masivas-report`, con PID file en `/infocodes/var/run/cso-backend.pid`).
+- El portal `release-dashboard-application` escucha en `/infocodes/var/run/infocodes.sock` (o `/tmp/infocodes.sock`) y delega la generación de informes ejecutivos PPTX al motor único en `cso-incident-masivas-report` (`localhost:8000`).
 
 ---
 
-## MÉTODO RECOMENDADO: Despliegue Standalone Precompilado (Cero red y Cero compilación en servidor)
+## MÉTODO RECOMENDADO: Despliegue Standalone Precompilado y Automatización en 1 Clic
 
-Debido a que el servidor de producción `infocodes` se encuentra tras un proxy corporativo restrictivo que bloquea o agota el tiempo de conexión a `registry.npmjs.org` (`npm error code ETIMEDOUT`), el método recomendado es **precompilar y empaquetar en local** (o en un runner CI) y desplegar el artefacto autónomo de solo **~4 MB**.
+Debido a que el servidor de producción `infocodes` se encuentra tras un proxy corporativo restrictivo que bloquea o agota el tiempo de conexión a `registry.npmjs.org` (`npm error code ETIMEDOUT`), el método estándar es **precompilar y empaquetar en local** y desplegar el artefacto autónomo mediante `scripts/deploy-production.ps1`.
 
 ### Ventajas:
-1. **Cero `npm ci`**: No requiere descargar dependencias desde el servidor de producción.
-2. **Cero `npm run build`**: No consume CPU ni memoria en el servidor para compilar.
-3. **Despliegues en 5 segundos**: Solo descomprimir y reiniciar PM2.
-4. **Independiente de proxy**: Cero riesgos de fallos de red o problemas TLS.
+1. **Cero `npm ci` y cero `npm run build` en el servidor**: No requiere internet ni consume CPU/RAM de compilación en producción.
+2. **Estado externo protegido (`/infocodes/var/`)**: La caché de Jira (`/infocodes/var/cache/problemas/`), los informes `.pptx` (`/infocodes/var/storage/executive_pptx/`), los snapshots de rollback (`/infocodes/var/backups/`) y los archivos `.env.local` se preservan intactos entre despliegues.
+3. **Snapshot automático y Rollback en 5 segundos**: Antes de cada despliegue se guarda copia de la versión en ejecución en `/infocodes/var/backups/`.
+4. **Despliegue en 1 Clic (~30 segundos)**: Un único comando compila, empaqueta, sube por `scp`, extrae por `ssh` (enviando el script por `stdin` a `bash` para evitar incompatibilidades con el shell de login `ksh`), reinicia los servicios y valida las sondas `/healthz` y `/readyz`.
 
-### Procedimiento:
+### Configurar clave SSH sin contraseña (una sola vez)
+
+Para desplegar sin introducir la contraseña de `infocodes` en cada paso:
+
+```powershell
+.\scripts\setup-ssh-key.ps1
+```
+*(Pide la contraseña una única vez para registrar `~/.ssh/id_ed25519.pub` en `~/.ssh/authorized_keys` del servidor con permisos `700`/`600`).*
+
+### Opción Rápida: Despliegue en 1 Clic desde PowerShell (`deploy-production.ps1`)
+
+Desde la raíz del proyecto en Windows PowerShell:
+
+```powershell
+# 1. Despliegue estándar del Frontend (compila, sube, hace backup, despliega y verifica):
+.\scripts\deploy-production.ps1
+# (o mediante npm: npm run deploy)
+
+# 2. Despliegue conjunto Frontend + Backend CSO (actualiza también cso-incident-masivas-report en :8000):
+.\scripts\deploy-production.ps1 -IncludeBackend
+
+# 3. Despliegue rápido sin recompilar (usa dist/gestion-problemas-standalone.tar.gz ya generado):
+.\scripts\deploy-production.ps1 -SkipBuild
+# (o combinando con backend: .\scripts\deploy-production.ps1 -SkipBuild -IncludeBackend)
+
+# 4. Reintentar extracción remota sin volver a subir por SCP (si el tar.gz ya está en /tmp/):
+.\scripts\deploy-production.ps1 -SkipBuild -SkipUpload
+
+# 5. Verificar únicamente estado y sondas HTTP (/healthz, /readyz y Nginx :8081) en ~4 segundos:
+.\scripts\deploy-production.ps1 -VerifyOnly
+
+# 6. ROLLBACK instantáneo (~1 segundo) a la release previa mediante symlink (./rollback.sh):
+.\scripts\deploy-production.ps1 -Rollback
+```
+
+### Arquitectura de releases atómicas (`current -> releases/`) y estado persistente (`/infocodes/var/`)
+
+Cada despliegue extrae el nuevo paquete en un directorio con marca temporal bajo `releases/` y cambia de forma atómica el enlace simbólico `current`, manteniendo las últimas **5 releases** listas para reversión instantánea (`./rollback.sh`) y el estado operativo fuera del árbol de código (`/infocodes/var/`):
+
+```text
+/infocodes/project/gestion-problemas-dashboard/
+├── releases/
+│   ├── 20261014_130000/        # Release previa (lista para rollback en 1s)
+│   └── 20261014_154500/        # Release activa
+├── shared/
+│   └── .env.local              # Credenciales inmutables enlazadas por symlink
+├── current -> releases/20261014_154500
+└── start.sh / restart.sh / status.sh / rollback.sh
+
+/infocodes/var/
+├── cache/problemas/            # dashboard_stats.json (1.68 MB), jira_wiki_links.json (18.9 KB)
+├── storage/executive_pptx/     # Presentaciones .pptx generadas (retención automática 14 días)
+├── run/                        # gestion-problemas.pid (:3001), cso-backend.pid (:8000)
+└── backups/                    # problemas-rollback.tar.gz, cso-backend-rollback/
+```
+
+---
+
+### Procedimiento Paso a Paso (Manual):
 
 #### 1. En tu máquina de desarrollo (o CI):
 Genera el paquete standalone listo para producción:
@@ -119,29 +171,29 @@ $env:NEXT_PUBLIC_BASE_PATH="/problemas"
 npm run build:standalone
 npm run package
 ```
-Esto genera el archivo comprimido `dist/gestion-problemas-standalone.tar.gz` (~4 MB).
+Esto genera el archivo comprimido `dist/gestion-problemas-standalone.tar.gz`.
 
 #### 2. Sube el tarball al servidor mediante SCP:
 ```bash
-scp dist/gestion-problemas-standalone.tar.gz infocodes@10.132.26.96:/infocodes/project/gestion-problemas-dashboard/
+scp dist/gestion-problemas-standalone.tar.gz infocodes@10.132.26.96:/tmp/gestion-problemas-standalone.tar.gz
 ```
 
 #### 3. En el servidor `infocodes`:
 ```bash
 cd /infocodes/project/gestion-problemas-dashboard
-tar -xzf gestion-problemas-standalone.tar.gz
-rm gestion-problemas-standalone.tar.gz
+tar -xzf /tmp/gestion-problemas-standalone.tar.gz
+rm -f /tmp/gestion-problemas-standalone.tar.gz
 chmod +x *.sh
 
 # Opción A (Recomendada y 100% autónoma, sin PM2 ni internet):
-./start.sh      # o ./restart.sh para reiniciar
-./status.sh     # verificar PID y últimas líneas de log
+./restart.sh    # o ./start.sh para iniciar
+./status.sh     # verificar PID en /infocodes/var/run/gestion-problemas.pid y logs
 
 # Opción B (Si PM2 está instalado globalmente en el sistema - NO uses npx):
 pm2 restart ecosystem.config.js || pm2 start ecosystem.config.js
 pm2 save
 ```
-¡Listo! La aplicación arranca directamente en el puerto 3001 con todas las dependencias y la caché precargada.
+¡Listo! La aplicación arranca directamente en el puerto 3001 con todas las dependencias y la caché persistente en `/infocodes/var/cache/problemas/`.
 
 ---
 
@@ -375,8 +427,21 @@ curl -s -o /dev/null -w "%{http_code}\n" http://localhost:3001/problemas
 
 ## Rollback
 
-pm2 no versiona builds anteriores. Antes de un cambio grande, anota el commit
-actual (`git rev-parse HEAD`) para poder volver atrás:
+### Opción 1 (Recomendada): Rollback instantáneo en 1 Clic (~5 segundos)
+
+Cada vez que ejecutas `.\scripts\deploy-production.ps1`, el servidor guarda automáticamente una copia exacta de la versión anterior en `/infocodes/var/backups/problemas-rollback.tar.gz` (y `/infocodes/var/backups/cso-backend-rollback.tar.gz` si usaste `-IncludeBackend`).
+
+Para volver inmediatamente a la versión previa desde Windows PowerShell:
+
+```powershell
+# Revertir solo el Frontend (Dashboard :3001):
+.\scripts\deploy-production.ps1 -Rollback
+
+# Revertir Frontend (:3001) + Backend CSO (:8000):
+.\scripts\deploy-production.ps1 -Rollback -IncludeBackend
+```
+
+### Opción 2 (Manual desde Git si usaste el método tradicional):
 
 ```bash
 git checkout <commit-anterior>
@@ -488,15 +553,17 @@ git pull
 npm ci
 unset NODE_ENV
 npm run build
+npx pm2 restart gestion-problemas-dashboard
+```
 
 ## Refresco nocturno automático de la caché de Jira (Crontab)
 
-Para mantener los datos y enlaces de Confluence siempre al día sin sobrecargar el servicio en horario laboral, el proyecto incluye el script `refresh-cache.sh`.
+Para mantener los datos y enlaces de Confluence siempre al día sin sobrecargar el servicio en horario laboral (y actuar como *watchdog* si el servicio se detuviera), el proyecto incluye el script [`refresh-cache.sh`](refresh-cache.sh).
 
 El script realiza:
-1. Comprobación del estado del servicio (si está caído lo levanta con `./start.sh`).
+1. Comprobación del PID en `/infocodes/var/run/gestion-problemas.pid` (si está caído lo levanta automáticamente con `./start.sh`).
 2. Petición a `http://127.0.0.1:3001/problemas/api/dashboard?refresh=true` con timeout de 300s.
-3. Actualización simultánea en memoria y en disco (`.cache/dashboard_stats.json` y `.cache/jira_wiki_links.json`).
+3. Actualización simultánea en memoria y en el directorio persistente `/infocodes/var/cache/problemas/` (`dashboard_stats.json` y `jira_wiki_links.json`).
 4. Registro de trazas con tiempos de respuesta en `cron.log`.
 
 ### Configuración en Crontab (todos los días a las 04:00 AM)

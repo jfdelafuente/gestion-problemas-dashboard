@@ -141,6 +141,19 @@ export default function ExecutiveReportModal({
 
   if (!isOpen) return null;
 
+  const triggerBrowserDownload = (downloadUrl: string, filename: string) => {
+    setSuccessResult({ downloadUrl, filename });
+    if (onGenerated) {
+      onGenerated();
+    }
+    const downloadLink = document.createElement('a');
+    downloadLink.href = downloadUrl;
+    downloadLink.download = filename;
+    document.body.appendChild(downloadLink);
+    downloadLink.click();
+    document.body.removeChild(downloadLink);
+  };
+
   const handleGenerate = async () => {
     setLoading(true);
     setError(null);
@@ -169,6 +182,7 @@ export default function ExecutiveReportModal({
         title: summary,
         confluenceUrl: confluenceUrl.trim(),
         force: true,
+        asyncMode: true,
         data: {
           incidentRef,
           title: summary,
@@ -187,17 +201,53 @@ export default function ExecutiveReportModal({
         body: JSON.stringify(payload),
       });
 
+      const headerReqId = res.headers.get('x-request-id');
       let data: ExecutiveReportResponse | null = null;
       const contentType = res.headers.get('content-type') || '';
       if (contentType.includes('application/json')) {
         data = (await res.json()) as ExecutiveReportResponse;
       } else {
         const text = await res.text();
-        throw new Error(`Respuesta no esperada del servidor (${res.status}): ${text.slice(0, 150)}`);
+        const refTag = headerReqId ? ` (Ref: ${headerReqId})` : '';
+        throw new Error(`Respuesta no esperada del servidor (${res.status}): ${text.slice(0, 150)}${refTag}`);
       }
 
-      if (!res.ok || !data.success) {
-        throw new Error(data.error || 'Error al generar la presentación PowerPoint');
+      const traceId = data.requestId || data.request_id || headerReqId;
+
+      if (!res.ok || !data.success || data.status === 'FAILED') {
+        const rawErr = data.error || 'Error al generar la presentación PowerPoint';
+        throw new Error(traceId && !rawErr.includes('Ref:') ? `${rawErr} (Ref: ${traceId})` : rawErr);
+      }
+
+      // Fase 2.1: Si el backend aceptó la tarea en segundo plano (202 PROCESSING), hacer polling ligero
+      if (res.status === 202 || data.status === 'PROCESSING') {
+        const statusEndpoint = getFullUrl(`/api/reports/executive-incident/${encodeURIComponent(incidentRef)}/status`);
+        const maxAttempts = 50; // ~60 segundos (50 * 1.2s)
+        for (let attempt = 0; attempt < maxAttempts; attempt++) {
+          await new Promise((r) => setTimeout(r, 1200));
+          const statusRes = await fetch(statusEndpoint, { cache: 'no-store' });
+          const statusContentType = statusRes.headers.get('content-type') || '';
+          if (!statusContentType.includes('application/json')) continue;
+
+          const statusData = (await statusRes.json()) as ExecutiveReportStatusResponse;
+          const pollTraceId = statusData.requestId || statusData.request_id || traceId;
+
+          if (statusData.status === 'FAILED') {
+            const failMsg = statusData.error || 'Fallo al construir la presentación en segundo plano';
+            throw new Error(pollTraceId && !failMsg.includes('Ref:') ? `${failMsg} (Ref: ${pollTraceId})` : failMsg);
+          }
+
+          if (statusData.status === 'READY' || statusData.exists) {
+            const readyUrl = statusData.downloadUrl || statusData.download_url || data.downloadUrl || data.download_url;
+            if (!readyUrl) {
+              throw new Error('El informe finalizó pero no devolvió URL de descarga.');
+            }
+            const finalFilename = statusData.filename || data.filename || `RESUMEN_EJECUTIVO_${incidentRef}.pptx`;
+            triggerBrowserDownload(getFullUrl(readyUrl), finalFilename);
+            return;
+          }
+        }
+        throw new Error(`Tiempo de espera agotado generando el informe PowerPoint${traceId ? ` (Ref: ${traceId})` : ''}.`);
       }
 
       const rawDownloadUrl = data.downloadUrl || data.download_url;
@@ -206,23 +256,7 @@ export default function ExecutiveReportModal({
       }
       const downloadUrl = getFullUrl(rawDownloadUrl);
       const filename = data.filename || `RESUMEN_EJECUTIVO_${incidentRef}.pptx`;
-
-      setSuccessResult({
-        downloadUrl,
-        filename,
-      });
-
-      if (onGenerated) {
-        onGenerated();
-      }
-
-      // Descarga automática inmediata
-      const downloadLink = document.createElement('a');
-      downloadLink.href = downloadUrl;
-      downloadLink.download = filename;
-      document.body.appendChild(downloadLink);
-      downloadLink.click();
-      document.body.removeChild(downloadLink);
+      triggerBrowserDownload(downloadUrl, filename);
 
     } catch (err: unknown) {
       const errMsg = err instanceof Error ? err.message : 'Error de comunicación con el servicio de informes';

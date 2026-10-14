@@ -4,8 +4,10 @@ const fs = require('fs');
 const path = require('path');
 
 // En despliegue standalone se ejecuta directamente server.js con Node puro.
-// Si no existe server.js (entorno legacy sin compilar en local), usa next start.
-const isStandalone = fs.existsSync(path.join(__dirname, 'server.js'));
+// Si existe el symlink current/server.js (Fase 2.2), se usa como directorio de ejecución.
+const currentDir = path.join(__dirname, 'current');
+const runDir = fs.existsSync(path.join(currentDir, 'server.js')) ? currentDir : __dirname;
+const isStandalone = fs.existsSync(path.join(runDir, 'server.js'));
 
 // Función utilitaria para leer variables de archivos .env sin dependencias externas
 function parseEnvFile(filePath) {
@@ -25,9 +27,11 @@ function parseEnvFile(filePath) {
   return env;
 }
 
-const envDefaults = parseEnvFile(path.join(__dirname, '.env'));
-const envLocal = parseEnvFile(path.join(__dirname, '.env.local'));
-const fileEnvs = { ...envDefaults, ...envLocal };
+const envDefaults = parseEnvFile(path.join(runDir, '.env'));
+const envLocalRoot = parseEnvFile(path.join(__dirname, '.env.local'));
+const envLocalShared = parseEnvFile(path.join(__dirname, 'shared', '.env.local'));
+const envLocalRun = parseEnvFile(path.join(runDir, '.env.local'));
+const fileEnvs = { ...envDefaults, ...envLocalRoot, ...envLocalShared, ...envLocalRun };
 
 module.exports = {
   apps: [
@@ -35,7 +39,7 @@ module.exports = {
       name: 'gestion-problemas-dashboard',
       script: isStandalone ? 'server.js' : 'node_modules/next/dist/bin/next',
       args: isStandalone ? '' : 'start -p 3001',
-      cwd: __dirname,
+      cwd: runDir,
       env: {
         NODE_ENV: 'production',
         PORT: 3001,

@@ -1,9 +1,11 @@
 # Arquitectura del Sistema: Gestión de Problemas y Portal de Incidencias
 
+> 📋 **Control de Evolución y Mejoras**: Consulta la hoja de ruta por fases y el estado de avances en **[ARCHITECTURE_ROADMAP.md](./ARCHITECTURE_ROADMAP.md)**.
+
 Este documento describe la arquitectura global, topología de red, componentes, APIs y flujos de comunicación entre los tres proyectos interconectados:
-1. **`release-dashboard-application`** (Portal Central y Motor de Generación PPTX)
+1. **`release-dashboard-application`** (Portal Central y Conversores de Releases)
 2. **`gestion-problemas-dashboard`** (Dashboard Next.js de Gestión de Problemas)
-3. **`cso-incident-masivas-report`** (Backend FastAPI y API REST de Informes)
+3. **`cso-incident-masivas-report`** (Backend FastAPI y Motor Single Source of Truth de Informes Ejecutivos PPTX)
 
 ---
 
@@ -22,20 +24,20 @@ flowchart TB
             PortalApp["Portal Release Dashboard\n(serve_app.py / Gunicorn / Unix Socket)\n/infocodes/var/run/infocodes.sock"]
             PortalStatic["Dashboards estáticos\n/dashboards -> HTML/JS"]
             DataStatic["Datos estáticos\n/data -> JSON/Excel"]
-            PPTXEngine["Motor Generador PPTX (Librería Compartida)\nconverters/src/report_generator/\n• executive_report_builder.py\n• confluence_parser.py\n• executive_paths.py"]
         end
 
         subgraph GestionProblemas ["2. gestion-problemas-dashboard"]
-            NextFrontend["Frontend Next.js 16 (React 19)\nPuerto: 3001 (PM2)\nbasePath: /problemas"]
-            NextApiDashboard["API Route: /api/dashboard\n(Caché en disco .cache/jira-issues.json)"]
+            NextFrontend["Frontend Next.js 16 (React 19)\nPuerto: 3001 (Standalone)\nbasePath: /problemas"]
+            NextApiDashboard["API Route: /api/dashboard\n(Caché externa: /infocodes/var/cache/problemas/)"]
             NextApiProxy["API Route Proxy: /api/reports/executive-incident\n(Hacia FastAPI :8000)"]
         end
 
         subgraph CsoBackend ["3. cso-incident-masivas-report"]
-            FastAPI["Backend FastAPI (Uvicorn)\nPuerto: 8000\n(PM2 / Demonio infocodes)"]
-            ApiReports["/api/reports/* (Incidencias Masivas)"]
-            ApiExecutive["/api/reports/executive-incident\n• POST (Generar PPTX)\n• GET /{ref}/status (Estado)\n• GET /{ref} (Descargar)\n• POST /cleanup (Higiene disco)"]
-            DiskStorage[("Disco Local:\noutput/executive_reports/*.pptx\n(Retención: 14 días)")]
+            FastAPI["Backend FastAPI (Uvicorn)\nPuerto: 8000\n(service.sh / PID: /infocodes/var/run/cso-backend.pid)"]
+            ApiReports["/api/reports/* (Incidencias Masivas y Releases)"]
+            ApiExecutive["/api/v1/reports/executive-incident\n• POST (Generar PPTX)\n• GET /{ref}/status (Estado)\n• GET /{ref} (Descargar)\n• POST /cleanup (Higiene disco)"]
+            PPTXEngine["Motor Generador PPTX (Single Source of Truth)\nbackend/report_generator/\n• executive_report_builder.py\n• confluence_parser.py\n• executive_models.py\n• executive_paths.py"]
+            DiskStorage[("Almacenamiento Externo (/infocodes/var/):\n/infocodes/var/storage/executive_pptx/*.pptx\n(Retención: 14 días)")]
         end
     end
 
@@ -61,12 +63,13 @@ flowchart TB
     %% Invocaciones del Backend FastAPI
     FastAPI --> ApiExecutive
     FastAPI --> ApiReports
-    ApiExecutive -->|"Importa lógica compartida"| PPTXEngine
+    ApiExecutive -->|"Invoca motor autónomo"| PPTXEngine
     ApiExecutive -->|"GET Postmortem HTML (HTTP/HTTPS)"| Confluence
-    ApiExecutive -->|"Almacena / Sirve binarios"| DiskStorage
+    PPTXEngine -->|"Almacena / Sirve binarios"| DiskStorage
 
     %% Proxy Dual en Desarrollo
     PortalApp -.->|"Proxy local /problemas\n(Intenta :3001, fallback :3000)"| NextFrontend
+    PortalApp -.->|"Proxy local /api/reports/executive-incident\n(Delega en FastAPI :8000)"| FastAPI
 ```
 
 ---
@@ -86,17 +89,16 @@ flowchart TB
 
 ## 3. Descripción de Componentes
 
-### 3.1. `release-dashboard-application` (Portal y Motor PPTX)
-* **Función**: Actúa como aplicación principal del servidor y aloja el motor de construcción de informes PowerPoint.
+### 3.1. `release-dashboard-application` (Portal Central y Conversores de Releases)
+* **Función**: Actúa como portal de entrada a los dashboards estáticos de incidencias masivas y releases, y provee los conversores de CSV e informes KPI de releases (`generate_postmortem_report.py`).
 * **`serve_app.py`**:
-  - Servidor de aplicaciones web que atiende peticiones del portal.
+  - Servidor de aplicaciones web que atiende peticiones del portal en local (`:8080`).
   - Implementa un **Proxy Inverso Dual** para la ruta `/problemas`:
-    - Intenta conectar al puerto **`3001`** (puerto estándar de producción de Next.js gestionado por PM2).
-    - Si no responde, realiza un fallback automático al puerto **`3000`** (puerto habitual en ejecución standalone o desarrollo).
-* **Motor Generador de Informes (`converters/src/report_generator/`)**:
-  - `confluence_parser.py`: Parsea contenido HTML exportado o descargado de páginas de postmortem en Confluence (título, resumen, impacto de negocio, causa raíz, línea temporal, acciones tomadas). Incluye fallback para extraer datos si solo se dispone de la descripción de Jira.
-  - `executive_report_builder.py`: Genera presentaciones PowerPoint (`.pptx`) en formato panorámico 16:9 con paleta visual corporativa Orange (`#F16E00`, `#000000`, etc.), tipografía Helvetica Neue, cajas de métricas destacadas y prevención de solapes de texto mediante cálculo dinámico de cajas envolventes.
-  - `executive_paths.py`: Gestiona la ubicación de almacenamiento de informes generados (`output/executive_reports/`) y la función `cleanup_old_executive_reports` para retención e higiene de disco.
+    - Intenta conectar al puerto **`3001`** (puerto estándar de producción de Next.js).
+    - Si no responde, realiza un fallback automático al puerto **`3000`**.
+  - **Delegación de Informes Ejecutivos (Fase 1.1)**:
+    - Redirige cualquier petición a `/api/reports/executive-incident` o `/api/v1/reports/executive-incident` directamente al backend propietario FastAPI (`FASTAPI_BACKEND_URL`, por defecto `http://127.0.0.1:8000`), y en caso de desarrollo offline sin FastAPI levantado, consume directamente el paquete Single Source of Truth desde `../cso-incident-masivas-report/backend/report_generator`.
+  - Los antiguos módulos `executive_*` en `converters/src/report_generator/` se mantienen únicamente como *shims* de re-exportación deprecados hacia `cso-incident-masivas-report`.
 
 ---
 
@@ -104,7 +106,7 @@ flowchart TB
 * **Tecnología**: Next.js 16 (App Router, Turbopack, React 19, TypeScript, Chart.js).
 * **Configuración de Producción**:
   - Servido bajo el subpath `/problemas` mediante `NEXT_PUBLIC_BASE_PATH=/problemas`.
-  - Escucha en el puerto **`3001`**, gestionado como demonio con **PM2** bajo el usuario `infocodes`.
+  - Escucha en el puerto **`3001`**, gestionado mediante `start.sh` / `restart.sh` / `status.sh` en modo standalone.
 * **Capas del Proyecto**:
   - **Frontend**:
     - **Pestaña General**: Resumen ejecutivo cruzado de Postmortems, PM Tasks, Problemas y Action Points.
@@ -112,25 +114,31 @@ flowchart TB
     - **Gráficos y KPIs**: Backlog acumulado, entradas vs resueltas por día, tiempo medio de resolución y agrupación por estado / grupo asignado.
     - **Modal de Informe Ejecutivo (`ExecutiveReportModal.tsx`)**: Integrado en la tabla de incidencias; permite comprobar estado, solicitar generación al backend FastAPI y descargar directamente el `.pptx`.
   - **API Routes (BFF - Backend for Frontend)**:
-    - `GET /api/dashboard`: Obtiene las incidencias del proyecto `PROB` de Jira mediante REST API. Cuenta con un sistema de **doble nivel de caché** (memoria + persistencia en disco en `.cache/jira-issues.json` con TTL configurable) que reduce el tiempo de respuesta de más de 20 segundos a menos de 200 milisegundos.
+    - `GET /api/dashboard`: Obtiene las incidencias del proyecto `PROB` de Jira mediante REST API. Cuenta con un sistema de **doble nivel de caché** (memoria + persistencia en disco gestionada por `lib/cache-paths.ts` en `CACHE_DIR`, por defecto `/infocodes/var/cache/problemas/` en producción y `.cache/` en desarrollo local, con migración transparente sin pérdida de datos y precalentamiento por `refresh-cache.sh`) que reduce el tiempo de respuesta de más de 20 segundos a menos de 200 milisegundos.
     - `POST /api/reports/executive-incident` y `GET /api/reports/executive-incident/[...slug]`: Rutas proxy que redirigen las peticiones de informe ejecutivo al backend FastAPI (`BACKEND_REPORTS_URL`, por defecto `http://localhost:8000`).
 
 ---
 
-### 3.3. `cso-incident-masivas-report` (Backend FastAPI)
+### 3.3. `cso-incident-masivas-report` (Backend FastAPI y Motor PPTX — Single Source of Truth)
 * **Tecnología**: FastAPI + Uvicorn (Python 3.10+).
 * **Puerto**: **`8000`** (`BACKEND_PORT=8000`).
-* **Endpoints de Informes Ejecutivos**:
-  - `POST /api/reports/executive-incident`:
+* **Motor Generador de Informes Ejecutivos (`backend/report_generator/`)**:
+  - **Propietario único (Fase 1.1)** de la lógica de generación PowerPoint de incidencias ejecutivas:
+    - `executive_models.py`: Modelos de dominio (`ExecutiveIncidentData`, `ActionPoint`, `ExecutiveReportMetadata`), sanitización de referencias y extractor heurístico de descripciones de Jira.
+    - `confluence_parser.py`: Parsea contenido HTML exportado o descargado de páginas de postmortem en Confluence (título, resumen, impacto de negocio, causa raíz, línea temporal, acciones tomadas).
+    - `executive_report_builder.py`: Genera presentaciones PowerPoint (`.pptx`) en formato panorámico 16:9 usando `assets/executive_template.pptx`, paleta corporativa Orange (`#F16E00`, `#000000`), renderizado `matplotlib` (`Agg`) y prevención dinámica de solapes.
+    - `executive_paths.py`: Gestiona la ruta de plantilla, el directorio de salida desacoplado del código fuente (`EXECUTIVE_REPORTS_OUTPUT_DIR` / `EXECUTIVE_REPORTS_DIR`, por defecto `/infocodes/var/storage/executive_pptx/` en producción y `backend/data/reports/executive/` en local, con migración automática de `.pptx` legados) y la rutina `cleanup_old_executive_reports`.
+* **Endpoints de Informes Ejecutivos (`/api/v1/reports/executive-incident` y `/api/reports/executive-incident`)**:
+  - `POST /api/v1/reports/executive-incident`:
     - Recibe el identificador de incidencia (`incidentRef`), título, enlace a Confluence y datos complementarios.
     - Descarga y analiza la página de Confluence o utiliza la extracción heurística de la descripción de Jira como fallback.
     - Si el informe ya existe en disco y no se fuerza regeneración (`force=false`), devuelve inmediatamente la referencia en caché.
-    - Si se genera de nuevo, invoca a `ExecutiveReportBuilder`, almacena el `.pptx` en disco y ejecuta automáticamente la rutina de higiene para eliminar informes con más de 14 días.
-  - `GET /api/reports/executive-incident/{incident_ref}/status`:
+    - Si se genera de nuevo, invoca a `ExecutiveReportBuilder`, almacena el `.pptx` en disco (`RESUMEN_EJECUTIVO_{incidentRef}.pptx`) y ejecuta automáticamente la rutina de higiene para eliminar informes con más de 14 días.
+  - `GET /api/v1/reports/executive-incident/{incident_ref}/status`:
     - Comprueba si el informe ya está compilado en disco.
-  - `GET /api/reports/executive-incident/{incident_ref}`:
+  - `GET /api/v1/reports/executive-incident/{incident_ref}`:
     - Retorna el flujo binario del archivo PowerPoint con cabecera `Content-Type: application/vnd.openxmlformats-officedocument.presentationml.presentation` y `Content-Disposition: attachment`.
-  - `POST /api/reports/executive-incident/cleanup`:
+  - `POST /api/v1/reports/executive-incident/cleanup`:
     - Endpoint manual o programado para purga de informes antiguos con parámetros `max_age_days` (defecto 14) y `keep_min` (defecto 5).
 
 ---
@@ -145,10 +153,10 @@ sequenceDiagram
     actor User as Usuario
     participant Modal as ExecutiveReportModal<br/>(:3001 /problemas)
     participant NextProxy as Next.js Proxy Route<br/>(/api/reports/executive-incident)
-    participant FastAPI as Backend FastAPI<br/>(:8000 /api/reports)
+    participant FastAPI as Backend FastAPI<br/>(:8000 /api/v1/reports)
     participant Confluence as Confluence / Jira
-    participant Builder as ExecutiveReportBuilder<br/>(release-dashboard)
-    participant Disk as Almacenamiento Local<br/>(output/executive_reports/)
+    participant Builder as ExecutiveReportBuilder<br/>(backend/report_generator)
+    participant Disk as Almacenamiento Local<br/>(backend/data/reports/executive/)
 
     User->>Modal: Clic en botón "Informe Ejecutivo PPTX" de una incidencia
     Modal->>NextProxy: GET /api/reports/executive-incident/{incidentRef}/status
@@ -167,7 +175,7 @@ sequenceDiagram
     end
 
     FastAPI->>Builder: ExecutiveReportBuilder.generate(incidentData, targetPath)
-    Builder->>Disk: Guarda archivo {incidentRef}_Informe_Ejecutivo.pptx
+    Builder->>Disk: Guarda archivo RESUMEN_EJECUTIVO_{incidentRef}.pptx
     Builder-->>FastAPI: Metadatos del informe (páginas, tamaño, fecha)
 
     FastAPI->>Disk: cleanup_old_executive_reports(max_age_days=14, keep_min=5)
@@ -278,17 +286,20 @@ server {
 | `JIRA_API_TOKEN` | *`<PAT_TOKEN>`* | Token de Acceso Personal para autenticación con Jira |
 | `NEXT_PUBLIC_JIRA_PROJECT_KEY`| `PROB` | Código del proyecto de problemas en Jira |
 | `BACKEND_REPORTS_URL` | `http://localhost:8000` | URL interna del backend FastAPI para generar PPTX |
+| `CACHE_DIR` | `/infocodes/var/cache/problemas` | Directorio externo para `dashboard_stats.json` y `jira_wiki_links.json` (fallback: `.cache`) |
 
-### `cso-incident-masivas-report` (`backend/.env`)
+### `cso-incident-masivas-report` (`backend/.env` / `service.sh`)
 | Variable | Valor Típico | Propósito |
 | :--- | :--- | :--- |
 | `PORT` / `BACKEND_PORT` | `8000` | Puerto en el que escucha Uvicorn / FastAPI |
 | `RELOAD` | `false` | Desactivar reload automático en producción |
+| `EXECUTIVE_REPORTS_OUTPUT_DIR` | `/infocodes/var/storage/executive_pptx` | Directorio externo de persistencia de informes `.pptx` (fallback: `backend/data/reports/executive`) |
 
 ### `release-dashboard-application` (`.env`)
 | Variable | Valor Típico | Propósito |
 | :--- | :--- | :--- |
 | `NEXTJS_PROBLEMAS_URL` | `http://localhost:3001` | URL objetivo a la que `serve_app.py` redirige `/problemas` |
+| `FASTAPI_BACKEND_URL` | `http://127.0.0.1:8000` | URL objetivo a la que `serve_app.py` delega `/api/reports/executive-incident` |
 
 ---
 

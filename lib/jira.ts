@@ -254,15 +254,15 @@ interface RemoteLink {
   object: { url: string; title: string };
 }
 
-// Caché persistente en disco para enlaces a Confluence
-const CACHE_DIR = path.join(process.cwd(), '.cache');
-const WIKI_LINKS_CACHE_FILE = path.join(CACHE_DIR, 'jira_wiki_links.json');
+// Caché persistente en disco para enlaces a Confluence (externalizable vía CACHE_DIR / /infocodes/var/cache/problemas)
+import { getCacheDir, getWikiLinksCacheFile } from '@/lib/cache-paths';
 
 function loadWikiPageCache(): Map<string, WikiPageLink> {
   const map = new Map<string, WikiPageLink>();
   try {
-    if (fs.existsSync(WIKI_LINKS_CACHE_FILE)) {
-      const data = JSON.parse(fs.readFileSync(WIKI_LINKS_CACHE_FILE, 'utf-8'));
+    const cacheFile = getWikiLinksCacheFile();
+    if (fs.existsSync(cacheFile)) {
+      const data = JSON.parse(fs.readFileSync(cacheFile, 'utf-8'));
       for (const [k, v] of Object.entries(data)) {
         if (v && typeof v === 'object' && 'url' in v && typeof (v as Record<string, unknown>).url === 'string') {
           map.set(k, v as unknown as WikiPageLink);
@@ -277,11 +277,13 @@ function loadWikiPageCache(): Map<string, WikiPageLink> {
 
 function saveWikiPageCache(map: Map<string, WikiPageLink>) {
   try {
-    if (!fs.existsSync(CACHE_DIR)) {
-      fs.mkdirSync(CACHE_DIR, { recursive: true });
+    const cacheDir = getCacheDir();
+    const cacheFile = getWikiLinksCacheFile();
+    if (!fs.existsSync(cacheDir)) {
+      fs.mkdirSync(cacheDir, { recursive: true });
     }
     const obj = Object.fromEntries(map.entries());
-    fs.writeFileSync(WIKI_LINKS_CACHE_FILE, JSON.stringify(obj, null, 2), 'utf-8');
+    fs.writeFileSync(cacheFile, JSON.stringify(obj, null, 2), 'utf-8');
   } catch (err) {
     console.warn('No se pudo guardar la caché de WikiPageLinks en disco:', err);
   }

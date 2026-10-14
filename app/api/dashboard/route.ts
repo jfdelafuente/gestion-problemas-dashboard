@@ -1,21 +1,20 @@
 import { getDashboardStats, DashboardStats } from '@/lib/jira';
+import { getCacheDir, getDashboardCacheFile } from '@/lib/cache-paths';
 import { NextRequest, NextResponse } from 'next/server';
 import fs from 'fs';
-import path from 'path';
 
 interface CacheEntry {
   data: DashboardStats;
   timestamp: number;
 }
 
-const CACHE_DIR = path.join(process.cwd(), '.cache');
-const DASHBOARD_CACHE_FILE = path.join(CACHE_DIR, 'dashboard_stats.json');
 const CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutos de caché
 
 function loadPersistentStats(): CacheEntry | null {
   try {
-    if (fs.existsSync(DASHBOARD_CACHE_FILE)) {
-      const raw = fs.readFileSync(DASHBOARD_CACHE_FILE, 'utf-8');
+    const cacheFile = getDashboardCacheFile();
+    if (fs.existsSync(cacheFile)) {
+      const raw = fs.readFileSync(cacheFile, 'utf-8');
       const parsed = JSON.parse(raw);
       if (parsed && parsed.data && parsed.timestamp) {
         return parsed as CacheEntry;
@@ -29,10 +28,12 @@ function loadPersistentStats(): CacheEntry | null {
 
 function savePersistentStats(entry: CacheEntry) {
   try {
-    if (!fs.existsSync(CACHE_DIR)) {
-      fs.mkdirSync(CACHE_DIR, { recursive: true });
+    const cacheDir = getCacheDir();
+    const cacheFile = getDashboardCacheFile();
+    if (!fs.existsSync(cacheDir)) {
+      fs.mkdirSync(cacheDir, { recursive: true });
     }
-    fs.writeFileSync(DASHBOARD_CACHE_FILE, JSON.stringify(entry), 'utf-8');
+    fs.writeFileSync(cacheFile, JSON.stringify(entry), 'utf-8');
   } catch (err) {
     console.warn('No se pudo guardar la caché de dashboard en disco:', err);
   }

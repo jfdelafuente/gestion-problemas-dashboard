@@ -1,2 +1,1 @@
-export { GET } from '@/app/healthz/route';
-
+export { GET } from '../../healthz/route';
