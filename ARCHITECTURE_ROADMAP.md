@@ -127,28 +127,30 @@ Hitos base ya implementados y verificados en el servidor `AOTLXPRBOA00001` (`10.
   - [x] Adaptar `ExecutiveReportModal.tsx` para hacer polling ligero (cada 1.2 s) cuando reciba estado `PROCESSING` y disparar la descarga automáticamente al pasar a `READY`.
 * **Criterio de aceptación**: Ninguna petición `POST` de generación asíncrona tarda más de 300 ms en responder al navegador, independientemente de lo que tarde Confluence.
 
-#### ✅ 2.2. Despliegues Atómicos Zero-Downtime y Rollback Instantáneo con Symlinks *(Completado)*
-* **Problema**: Extraer el `.tar.gz` directamente sobre el directorio activo en ejecución reemplaza ficheros en caliente mientras Node.js está corriendo.
+#### ✅ 2.2. Despliegues Atómicos Zero-Downtime, Empaquetado Ultraligero y Rollback Instantáneo con Symlinks *(Completado en los 3 Repositorios)*
+* **Problema**: Extraer el `.tar.gz` directamente sobre el directorio activo en ejecución reemplaza ficheros en caliente mientras los procesos están corriendo y deja archivos residuales de desarrollo en producción.
 * **Tareas de control**:
-  - [x] Estructurar el directorio de producción con versionado por release:
+  - [x] Estructurar el directorio de producción con versionado por release en **los 3 proyectos** (`gestion-problemas-dashboard`, `cso-incident-masivas-report` y `release-dashboard-application`):
     ```text
-    /infocodes/project/gestion-problemas-dashboard/
+    /infocodes/project/<app>/
     ├── releases/
     │   ├── 20261014_120000/
     │   └── 20261015_093000/
     ├── shared/
-    │   ├── .env.local
-    │   └── .env.production.local
+    │   ├── .env.local / .env       # Credenciales persistentes
+    │   ├── venv/                   # Entorno virtual Python compartido (cso-incident)
+    │   └── data/                   # Datos persistentes (release-dashboard)
     └── current -> releases/20261015_093000
     ```
-  - [x] Ajustar `start.sh` / `status.sh` / `ecosystem.config.js` / `deploy-production.ps1` para operar sobre `/current` e inyectar las variables de `/shared`.
-  - [x] Crear script `rollback.sh` en el servidor que reasigne `current` a la release inmediatamente anterior y reinicie el proceso en 1 segundo, conservando las últimas 5 releases y purgando las más antiguas.
-* **Criterio de aceptación**: Un fallo en una nueva versión en producción se revierte en menos de 3 segundos ejecutando `./rollback.sh` (o `.\scripts\deploy-production.ps1 -Rollback`) sin necesidad de recompilar ni volver a subir artefactos.
+  - [x] Optimizar el empaquetado standalone mediante lista blanca estricta de runtime (`scripts/prepare-standalone.js` y `/*turbopackIgnore: true*/`), reduciendo `gestion-problemas-standalone.tar.gz` de **`37.25 MB` a `4.01 MB` (-89%)**, `cso-incident-backend.tar.gz` a **`~1.5 MB`** y `release-dashboard-runtime.tar.gz` a **`~2.3 MB`**.
+  - [x] Ajustar `start.sh` / `status.sh` / `service.sh` / `deploy-production.ps1` en los 3 repositorios para operar sobre `/current`, inyectar recursos de `/shared` y limpiar automáticamente archivos residuales de la raíz en producción.
+  - [x] Crear script `rollback.sh` en los 3 servicios que reasigne `current` a la release inmediatamente anterior y reinicie el proceso en `< 3 segundos`, conservando las últimas **3 releases** limpias y purgando las más antiguas.
+* **Criterio de aceptación**: Un fallo en una nueva versión en producción en cualquiera de los 3 proyectos se revierte en menos de 3 segundos ejecutando `./rollback.sh` (o `.\scripts\deploy-production.ps1 -Rollback`) sin necesidad de recompilar ni tener Git en el servidor.
 
 #### ✅ 2.3. Trazabilidad End-to-End con `X-Request-ID` y Logs Estructurados *(Completado)*
 * **Problema**: Correlacionar un fallo reportado por el usuario requiere buscar manualmente por hora entre los logs de Nginx, `app.log` (Next.js) y `backend.log` (FastAPI).
 * **Tareas de control**:
-  - [x] Añadir `proxy_set_header X-Request-ID $request_id;` y `add_header X-Request-ID $request_id always;` en `nginx.conf`.
+  - [x] Añadir `proxy_set_header X-Request-ID $request_id;` y `add_header X-Request-ID $request_id always;` en `nginx.conf` y `conf.d/cso-incident.conf`.
   - [x] Hacer que las rutas proxy de Next.js (`app/api/reports/executive-incident/...`) lean o generen `X-Request-ID` y lo reenvíen en las cabeceras hacia FastAPI y en la respuesta al cliente.
   - [x] Añadir el middleware HTTP `trace_request_middleware` en FastAPI (`backend/main.py`) que incluya `X-Request-ID` y tiempo de ejecución (`X-Process-Time`) en cada línea de log y respuesta.
 * **Criterio de aceptación**: Ante cualquier error mostrado en el modal del frontend, el mensaje incluye un código de traza (`Ref: req-xxxx`) localizable con un simple `grep` tanto en Next.js como en FastAPI.
@@ -162,7 +164,7 @@ Hitos base ya implementados y verificados en el servidor `AOTLXPRBOA00001` (`10.
 #### ✅ 3.1. Delimitación Formal del BFF y Capa de Datos *(Completado)*
 * **Problema**: Definir con claridad la frontera de responsabilidades entre las integraciones de Jira (Next.js) y Confluence/PPTX (FastAPI) bajo un contrato formal versionado.
 * **Tareas de control**:
-  - [x] Delimitar formalmente el contrato entre Next.js (`gestion-problemas-dashboard` como BFF de Jira + UI) y Python (`cso-incident-masivas-report` como motor único de informes ejecutivos y Confluence).
+  - [x] Delimitar formalmente el contrato entre Next.js (`gestion-problemas-dashboard` como BFF de Jira + UI), Python (`cso-incident-masivas-report` como motor único de informes ejecutivos, SQLite y Confluence) y el Portal (`release-dashboard-application` como contenedor unificado de dashboards estáticos, incluyendo `/dashboards/reportes-incidencias/`).
   - [x] Documentar y exportar la especificación OpenAPI 3.1 versionada en [`contracts/executive-reports.openapi.json`](./contracts/executive-reports.openapi.json) (`/api/v1/reports/executive-incident/*`).
   - [x] Mantener las rutas `/api/reports/executive-incident/*` de Next.js como proxy BFF ligero con propagación de `X-Request-ID`.
 
@@ -193,11 +195,14 @@ Utiliza esta tabla para registrar cada mejora a medida que se implemente y despl
 | `2026-10-14` | `1.1` | Unificar motor PPTX en un único repositorio (`cso-incident-masivas-report`) | `cso-incident`, `release-dashboard` | ✅ | Sí |
 | `2026-10-14` | `1.2` | Externalizar caché, informes PPTX y PID files a `/infocodes/var/` | `gestion-problemas`, `cso-incident` | ✅ | Sí |
 | `2026-10-14` | `1.3` | Script local `scripts/deploy-production.ps1` (Deploy en 1 clic, `-IncludeBackend`, `-Rollback`) + `setup-ssh-key.ps1` | `gestion-problemas-dashboard` | ✅ | Sí |
-| `2026-10-14` | `2.1` | Generación asíncrona de PPTX con `BackgroundTasks` (`202 Accepted`) y polling en `ExecutiveReportModal.tsx` | `cso-incident`, `gestion-problemas` | ✅ | Sí |
+| `2026-10-14` | `2.1` | Generación asíncrona de PPTX con `BackgroundTasks` (`202 Accepted`) y polling en `ExecutivePowerPointModal.tsx` | `cso-incident`, `gestion-problemas` | ✅ | Sí |
 | `2026-10-14` | `2.2` | Despliegue atómico con symlinks (`releases/` -> `current`), `shared/.env.local` y `rollback.sh` | `gestion-problemas-dashboard` | ✅ | Sí |
 | `2026-10-14` | `2.3` | Trazabilidad distribuida end-to-end con cabecera `X-Request-ID` y `X-Process-Time` | Nginx + `gestion-problemas` + `cso-incident` | ✅ | Sí |
 | `2026-10-14` | `3.1` | Delimitación formal BFF/Backend y especificación OpenAPI 3.1 (`contracts/executive-reports.openapi.json`) | `gestion-problemas`, `cso-incident` | ✅ | Sí |
 | `2026-10-14` | `3.2` | Sincronización y validación automática `OpenAPI <-> TypeScript <-> Pydantic` (`scripts/sync-openapi-types.js`) | `gestion-problemas-dashboard` | ✅ | Sí |
 | `2026-10-14` | `3.3` | Pipeline CI/CD (`.github/workflows/release-standalone.yml`) y Matriz RACI + SLOs en `ARCHITECTURE.md` | `gestion-problemas-dashboard` | ✅ | Sí |
+| `2026-10-15` | `2.2b` | Extensión del modelo de artefacto standalone, `releases/<TS> -> current`, `shared/venv` y `deploy-production.ps1` a `cso-incident` (`1.5 MB`) y `release-dashboard` (`2.3 MB`) | `cso-incident`, `release-dashboard` | ✅ | Sí |
+| `2026-10-15` | `2.2c` | Optimización de `gestion-problemas-standalone.tar.gz` de `37.25 MB` a `4.01 MB` (-89%) por lista blanca de runtime + limpieza automática de raíz y retención de 3 releases | `gestion-problemas-dashboard` | ✅ | Sí |
+| `2026-10-15` | `3.4` | Consolidación de UI `/dashboards/reportes-incidencias/`, proxy Nginx con caché para Epsilon IA (`/api/epsilon/`) e inclusión modular `conf.d/cso-incident.conf` | `release-dashboard`, `cso-incident`, Nginx | ✅ | Sí |
 
 

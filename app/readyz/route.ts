@@ -68,7 +68,7 @@ export async function GET() {
       uptimeSeconds: Math.floor(process.uptime()),
       checks,
     },
-    { status: isDegraded ? 200 : 200 }
+    { status: isDegraded ? 200 : 200, headers: { 'Cache-Control': 'no-store' } }
   );
 }
 

@@ -11,7 +11,7 @@
   --mo-orange-tint: #ffe7d1;
   --mo-yellow: #ffd200;
 
-  --mo-grey-50: #f7f6f4;
+  --mo-grey-50: #f5f3f0;
   --mo-grey-100: #efede9;
   --mo-grey-200: #dedad3;
   --mo-grey-300: #b8b2a9;
@@ -19,9 +19,18 @@
   --mo-grey-500: #5c5852;
   --mo-grey-600: #3d3a36;
   --mo-grey-700: #26241f;
+  --mo-grey-750: #26241f;
+  --mo-grey-800: #1a1815;
   --mo-grey-900: #0c0b09;
 
-  --fg-1: var(--mo-black);
+  --mo-border-dark: #3c3934;
+  --mo-border-dark-subtle: #2a2723;
+
+  --mo-glow-orange: 0 0 8px rgba(255, 121, 0, 0.6);
+  --mo-glow-green: 0 0 8px rgba(34, 197, 94, 0.6);
+  --mo-glow-red: 0 0 8px rgba(239, 68, 68, 0.6);
+
+  --fg-1: var(--mo-grey-900);
   --fg-2: var(--mo-grey-600);
   --fg-3: var(--mo-grey-400);
 
@@ -41,11 +50,13 @@
 
   --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.06);
   --shadow-2: 0 4px 12px rgba(0, 0, 0, 0.08);
+  --shadow-3: 0 12px 32px rgba(0, 0, 0, 0.12);
   --shadow-focus: 0 0 0 3px rgba(255, 121, 0, 0.35);
 
   --ease-out: cubic-bezier(0.2, 0.7, 0.2, 1);
   --ease-emph: cubic-bezier(0.16, 1, 0.3, 1);
   --dur-fast: 120ms;
+  --dur-base: 220ms;
   --dur-slow: 420ms;
 
   --background: var(--bg-2);
@@ -68,6 +79,38 @@ body {
   color: var(--foreground);
   font-family: var(--font-body);
   -webkit-font-smoothing: antialiased;
+}
+
+/* Accesibilidad y utilidades compartidas con el Portal */
+.skip-link {
+  position: absolute;
+  top: -100px;
+  left: 16px;
+  z-index: 9999;
+  background: var(--mo-orange);
+  color: var(--mo-black) !important;
+  font-weight: 800;
+  font-size: 13px;
+  padding: 10px 18px;
+  border-radius: 0 0 8px 8px;
+  text-decoration: none;
+  box-shadow: var(--shadow-2);
+  transition: top 0.18s ease;
+}
+
+.skip-link:focus {
+  top: 0;
+  outline: 2px solid var(--mo-white);
+  outline-offset: -4px;
+}
+
+:focus-visible {
+  outline: 2px solid var(--mo-orange);
+  outline-offset: 2px;
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
 }
 
 a {
@@ -133,21 +176,22 @@ select {
 }
 
 /* ============================================================
-   Barra superior compartida (mo-topbar)
+   Barra superior compartida (mo-topbar — idéntica al Portal)
    ============================================================ */
 .mo-topbar {
-  position: sticky;
-  top: 0;
-  z-index: 60;
-  background: #000;
-  color: #fff;
+  background: var(--mo-black);
+  color: var(--mo-white);
   display: flex;
   align-items: center;
   gap: 20px;
   padding: 0 24px;
   height: 64px;
-  border-bottom: 1px solid #26241F;
+  border-bottom: 1px solid var(--mo-grey-750);
+  font-family: var(--font-body);
   box-sizing: border-box;
+  position: sticky;
+  top: 0;
+  z-index: 100;
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
@@ -174,15 +218,15 @@ select {
 .mo-topbar-sep {
   width: 1px;
   height: 24px;
-  background: #33302B;
+  background: var(--mo-border-dark);
   flex-shrink: 0;
 }
 
 .mo-topbar-dept {
   font-size: 13px;
   font-weight: 600;
-  letter-spacing: .01em;
-  color: #9E988E;
+  letter-spacing: 0.01em;
+  color: var(--mo-grey-300);
   white-space: nowrap;
   flex-shrink: 0;
 }
@@ -200,20 +244,81 @@ select {
   font-family: inherit;
   font-size: 13.5px;
   font-weight: 600;
-  color: #9E988E;
+  color: var(--mo-grey-300);
   padding: 8px 14px;
   border-bottom: 2px solid transparent;
-  transition: color .18s ease, border-color .18s ease;
+  transition: color 0.18s ease, border-color 0.18s ease;
   white-space: nowrap;
 }
 
 .mo-topbar-nav a:hover {
-  color: #fff;
+  color: var(--mo-white);
 }
 
 .mo-topbar-nav a.active {
-  color: #FF7900;
-  border-bottom-color: #FF7900;
+  color: var(--mo-orange);
+  border-bottom-color: var(--mo-orange);
+}
+
+/* Indicador de estado de servicio en tiempo real */
+.mo-topbar-right {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.mo-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--mo-grey-800);
+  border: 1px solid var(--mo-border-dark-subtle);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--mo-grey-300);
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  user-select: none;
+}
+
+.mo-status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--mo-grey-400);
+  transition: background 0.25s ease, box-shadow 0.25s ease;
+}
+
+.mo-status-dot.online {
+  background: #22c55e;
+  box-shadow: var(--mo-glow-green);
+}
+
+.mo-status-dot.syncing {
+  background: var(--mo-orange);
+  box-shadow: var(--mo-glow-orange);
+  animation: mo-pulse 1.2s infinite ease-in-out;
+}
+
+.mo-status-dot.offline {
+  background: #ef4444;
+  box-shadow: var(--mo-glow-red);
+}
+
+@keyframes mo-pulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.45;
+    transform: scale(0.85);
+  }
 }
 
 @media (max-width: 900px) {
@@ -233,6 +338,15 @@ select {
   .mo-topbar-nav a {
     padding: 8px 10px;
     font-size: 13px;
+  }
+}
+
+@media (max-width: 640px) {
+  .mo-status-text {
+    display: none;
+  }
+  .mo-status-badge {
+    padding: 6px;
   }
 }
 

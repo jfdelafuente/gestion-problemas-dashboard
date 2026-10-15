@@ -96,9 +96,10 @@ Debido a que el servidor de producción `infocodes` se encuentra tras un proxy c
 
 ### Ventajas:
 1. **Cero `npm ci` y cero `npm run build` en el servidor**: No requiere internet ni consume CPU/RAM de compilación en producción.
-2. **Estado externo protegido (`/infocodes/var/`)**: La caché de Jira (`/infocodes/var/cache/problemas/`), los informes `.pptx` (`/infocodes/var/storage/executive_pptx/`), los snapshots de rollback (`/infocodes/var/backups/`) y los archivos `.env.local` se preservan intactos entre despliegues.
-3. **Snapshot automático y Rollback en 5 segundos**: Antes de cada despliegue se guarda copia de la versión en ejecución en `/infocodes/var/backups/`.
-4. **Despliegue en 1 Clic (~30 segundos)**: Un único comando compila, empaqueta, sube por `scp`, extrae por `ssh` (enviando el script por `stdin` a `bash` para evitar incompatibilidades con el shell de login `ksh`), reinicia los servicios y valida las sondas `/healthz` y `/readyz`.
+2. **Paquete Ultraligero (`~4.01 MB`) y Producción Limpia**: [`scripts/prepare-standalone.js`](scripts/prepare-standalone.js) aplica una lista blanca estricta de runtime (eliminando código fuente TypeScript, carpetas de desarrollo y trazas recursivas de Turbopack), reduciendo el artefacto un **89%** (de `37.25 MB` a `4.01 MB`). Además, el despliegue limpia automáticamente archivos residuales de la raíz en `/infocodes/project/gestion-problemas-dashboard`.
+3. **Estado externo protegido (`/infocodes/var/`)**: La caché de Jira (`/infocodes/var/cache/problemas/`), los informes `.pptx` (`/infocodes/var/storage/executive_pptx/`), la base de datos SQLite (`/infocodes/var/data/cso-incident-masivas-report/reports.db`), los snapshots de rollback (`/infocodes/var/backups/`) y los archivos `shared/.env.local` se preservan intactos entre despliegues.
+4. **Releases Atómicas y Rollback en `< 3 segundos`**: Cada despliegue se extrae en `releases/<YYYYMMDD_HHMMSS>` y conmuta atómicamente el symlink `current`, conservando las últimas **3 releases limpias**.
+5. **Despliegue en 1 Clic (~20 segundos)**: Un único comando valida contratos OpenAPI (`npm run check:contracts`), compila, empaqueta, sube por `scp`, extrae por `ssh`, reinicia los servicios y valida las sondas `/healthz` y `/readyz`.
 
 ### Configurar clave SSH sin contraseña (una sola vez)
 
@@ -114,7 +115,7 @@ Para desplegar sin introducir la contraseña de `infocodes` en cada paso:
 Desde la raíz del proyecto en Windows PowerShell:
 
 ```powershell
-# 1. Despliegue estándar del Frontend (compila, sube, hace backup, despliega y verifica):
+# 1. Despliegue estándar del Frontend (compila, sube 4.01 MB, limpia raíz, despliega en releases/ y verifica):
 .\scripts\deploy-production.ps1
 # (o mediante npm: npm run deploy)
 
@@ -131,29 +132,32 @@ Desde la raíz del proyecto en Windows PowerShell:
 # 5. Verificar únicamente estado y sondas HTTP (/healthz, /readyz y Nginx :8081) en ~4 segundos:
 .\scripts\deploy-production.ps1 -VerifyOnly
 
-# 6. ROLLBACK instantáneo (~1 segundo) a la release previa mediante symlink (./rollback.sh):
+# 6. ROLLBACK instantáneo (< 3 segundos) a la release previa mediante symlink (./rollback.sh):
 .\scripts\deploy-production.ps1 -Rollback
 ```
 
 ### Arquitectura de releases atómicas (`current -> releases/`) y estado persistente (`/infocodes/var/`)
 
-Cada despliegue extrae el nuevo paquete en un directorio con marca temporal bajo `releases/` y cambia de forma atómica el enlace simbólico `current`, manteniendo las últimas **5 releases** listas para reversión instantánea (`./rollback.sh`) y el estado operativo fuera del árbol de código (`/infocodes/var/`):
+Tanto `gestion-problemas-dashboard` (`4.01 MB`) como `cso-incident-masivas-report` (`1.5 MB`) y `release-dashboard-application` (`2.3 MB`) siguen el mismo patrón de releases atómicas por symlink, manteniendo las últimas **3 releases** listas para reversión instantánea (`./rollback.sh`) y el estado operativo fuera del árbol de código (`/infocodes/var/`):
 
 ```text
 /infocodes/project/gestion-problemas-dashboard/
+├── current -> releases/20261015_152157
 ├── releases/
-│   ├── 20261014_130000/        # Release previa (lista para rollback en 1s)
-│   └── 20261014_154500/        # Release activa
+│   ├── 20261014_155059/        # Release histórica (-2)
+│   ├── 20261014_161624/        # Release previa (lista para rollback en 1s)
+│   └── 20261015_152157/        # Release activa (solo runtime: server.js, .next, public, node_modules)
 ├── shared/
 │   └── .env.local              # Credenciales inmutables enlazadas por symlink
-├── current -> releases/20261014_154500
-└── start.sh / restart.sh / status.sh / rollback.sh
+├── app.log                     # Log de aplicación
+└── start.sh / stop.sh / restart.sh / status.sh / refresh-cache.sh / rollback.sh
 
 /infocodes/var/
-├── cache/problemas/            # dashboard_stats.json (1.68 MB), jira_wiki_links.json (18.9 KB)
+├── cache/problemas/            # dashboard_stats.json (~1.68 MB), jira_wiki_links.json (~18.9 KB)
+├── data/cso-incident-masivas-report/ # reports.db (SQLite de informes semanales y masivas)
 ├── storage/executive_pptx/     # Presentaciones .pptx generadas (retención automática 14 días)
-├── run/                        # gestion-problemas.pid (:3001), cso-backend.pid (:8000)
-└── backups/                    # problemas-rollback.tar.gz, cso-backend-rollback/
+├── run/                        # gestion-problemas.pid (:3001), cso-backend.pid (:8000), infocodes.sock
+└── backups/                    # problemas-rollback.tar.gz, cso-incident-masivas-report/, release-dashboard-application/
 ```
 
 ---
@@ -171,7 +175,7 @@ $env:NEXT_PUBLIC_BASE_PATH="/problemas"
 npm run build:standalone
 npm run package
 ```
-Esto genera el archivo comprimido `dist/gestion-problemas-standalone.tar.gz`.
+Esto valida el contrato OpenAPI (`check:contracts`) y genera el archivo comprimido `dist/gestion-problemas-standalone.tar.gz` (`~4.01 MB`).
 
 #### 2. Sube el tarball al servidor mediante SCP:
 ```bash
@@ -181,16 +185,20 @@ scp dist/gestion-problemas-standalone.tar.gz infocodes@10.132.26.96:/tmp/gestion
 #### 3. En el servidor `infocodes`:
 ```bash
 cd /infocodes/project/gestion-problemas-dashboard
-tar -xzf /tmp/gestion-problemas-standalone.tar.gz
+TS=$(date +%Y%m%d_%H%M%S)
+mkdir -p releases/$TS
+tar -xzf /tmp/gestion-problemas-standalone.tar.gz -C releases/$TS
 rm -f /tmp/gestion-problemas-standalone.tar.gz
-chmod +x *.sh
+ln -sfn /infocodes/project/gestion-problemas-dashboard/shared/.env.local releases/$TS/.env.local
+ln -sfn releases/$TS current
+cp -f current/*.sh . && chmod +x *.sh current/*.sh
 
 # Opción A (Recomendada y 100% autónoma, sin PM2 ni internet):
 ./restart.sh    # o ./start.sh para iniciar
 ./status.sh     # verificar PID en /infocodes/var/run/gestion-problemas.pid y logs
 
 # Opción B (Si PM2 está instalado globalmente en el sistema - NO uses npx):
-pm2 restart ecosystem.config.js || pm2 start ecosystem.config.js
+pm2 restart current/ecosystem.config.js || pm2 start current/ecosystem.config.js
 pm2 save
 ```
 ¡Listo! La aplicación arranca directamente en el puerto 3001 con todas las dependencias y la caché persistente en `/infocodes/var/cache/problemas/`.
@@ -427,9 +435,9 @@ curl -s -o /dev/null -w "%{http_code}\n" http://localhost:3001/problemas
 
 ## Rollback
 
-### Opción 1 (Recomendada): Rollback instantáneo en 1 Clic (~5 segundos)
+### Opción 1 (Recomendada): Rollback instantáneo por Symlink (`< 3 segundos`)
 
-Cada vez que ejecutas `.\scripts\deploy-production.ps1`, el servidor guarda automáticamente una copia exacta de la versión anterior en `/infocodes/var/backups/problemas-rollback.tar.gz` (y `/infocodes/var/backups/cso-backend-rollback.tar.gz` si usaste `-IncludeBackend`).
+Cada despliegue conserva las últimas **3 versiones limpias** en `releases/<TIMESTAMP>` (además del snapshot de seguridad en `/infocodes/var/backups/problemas-rollback.tar.gz`). El script [`rollback.sh`](rollback.sh) reasigna de forma atómica el symlink `current` a la release inmediatamente anterior y reinicia el servicio en ~1 segundo.
 
 Para volver inmediatamente a la versión previa desde Windows PowerShell:
 
@@ -439,6 +447,11 @@ Para volver inmediatamente a la versión previa desde Windows PowerShell:
 
 # Revertir Frontend (:3001) + Backend CSO (:8000):
 .\scripts\deploy-production.ps1 -Rollback -IncludeBackend
+```
+
+O directamente en el servidor vía SSH:
+```bash
+cd /infocodes/project/gestion-problemas-dashboard && ./rollback.sh
 ```
 
 ### Opción 2 (Manual desde Git si usaste el método tradicional):

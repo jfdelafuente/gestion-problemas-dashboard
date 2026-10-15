@@ -65,7 +65,7 @@ export async function GET(
         const data = await resp.json();
         return NextResponse.json(
           { ...data, requestId: backendReqId },
-          { status: resp.status, headers: { 'X-Request-ID': backendReqId } }
+          { status: resp.status, headers: { 'X-Request-ID': backendReqId, 'Cache-Control': 'no-store' } }
         );
       }
       return NextResponse.json(
@@ -74,7 +74,7 @@ export async function GET(
           requestId: backendReqId,
           error: `Error del backend al descargar archivo (${resp.status}) (Ref: ${backendReqId})`,
         },
-        { status: resp.status, headers: { 'X-Request-ID': backendReqId } }
+        { status: resp.status, headers: { 'X-Request-ID': backendReqId, 'Cache-Control': 'no-store' } }
       );
     }
 
@@ -88,6 +88,7 @@ export async function GET(
         'Content-Type': contentType,
         'Content-Disposition': contentDisposition,
         'X-Request-ID': backendReqId,
+        'Cache-Control': 'no-store',
       },
     });
   } catch (error: unknown) {
@@ -101,7 +102,7 @@ export async function GET(
         error: `No se pudo comunicar con el servidor backend (${BACKEND_URL}). Verifique que el servicio esté arrancado en el puerto 8000. (Ref: ${reqId})`,
         details,
       },
-      { status: 502, headers: { 'X-Request-ID': reqId } }
+      { status: 502, headers: { 'X-Request-ID': reqId, 'Cache-Control': 'no-store' } }
     );
   }
 }

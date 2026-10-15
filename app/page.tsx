@@ -158,19 +158,42 @@ export default function Home() {
   const fetchStats = async (forceRefresh = false) => {
     try {
       setLoading(true);
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(
+          new CustomEvent('mo:dashboard-sync', {
+            detail: { state: 'syncing', title: forceRefresh ? 'Refrescando datos desde Jira...' : 'Actualizando datos...' },
+          })
+        );
+      }
       const basePath = process.env.NEXT_PUBLIC_BASE_PATH || '';
       const url = `${basePath}/api/dashboard${forceRefresh ? '?refresh=true' : ''}`;
       const response = await fetch(url);
       if (!response.ok) {
         throw new Error('Error fetching dashboard stats');
       }
+      const cacheStatus = response.headers.get('X-Cache') || response.headers.get('X-Cache-Status');
+      const cachedAt = response.headers.get('X-Cached-At');
       const data = await response.json();
       setStats(data);
-      setLastUpdated(new Date());
+      setLastUpdated(cachedAt && !forceRefresh ? new Date(cachedAt) : new Date());
       setError(null);
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(
+          new CustomEvent('mo:dashboard-sync', {
+            detail: { state: 'online', cacheStatus },
+          })
+        );
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unknown error occurred');
       console.error('Error:', err);
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(
+          new CustomEvent('mo:dashboard-sync', {
+            detail: { state: 'offline', title: 'Error al consultar datos de Jira' },
+          })
+        );
+      }
     } finally {
       setLoading(false);
     }
@@ -185,16 +208,32 @@ export default function Home() {
         if (!response.ok) {
           throw new Error('Error fetching dashboard stats');
         }
+        const cacheStatus = response.headers.get('X-Cache') || response.headers.get('X-Cache-Status');
+        const cachedAt = response.headers.get('X-Cached-At');
         const data = await response.json();
         if (!ignore) {
           setStats(data);
-          setLastUpdated(new Date());
+          setLastUpdated(cachedAt ? new Date(cachedAt) : new Date());
           setError(null);
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(
+              new CustomEvent('mo:dashboard-sync', {
+                detail: { state: 'online', cacheStatus },
+              })
+            );
+          }
         }
       } catch (err) {
         if (!ignore) {
           setError(err instanceof Error ? err.message : 'Unknown error occurred');
           console.error('Error:', err);
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(
+              new CustomEvent('mo:dashboard-sync', {
+                detail: { state: 'offline', title: 'Error al consultar datos de Jira' },
+              })
+            );
+          }
         }
       } finally {
         if (!ignore) {
@@ -295,7 +334,7 @@ export default function Home() {
         onRefresh={() => fetchStats(true)}
       />
 
-      <main style={{ maxWidth: 1320, margin: '0 auto', padding: '28px 32px 72px' }}>
+      <main id="main-content" style={{ maxWidth: 1320, margin: '0 auto', padding: '28px 32px 72px' }}>
         {error && (
           <div style={{ background: '#FBE3E1', border: `1px solid ${C.danger}`, color: C.danger, padding: '12px 16px', borderRadius: 8, marginBottom: 24 }}>
             {error}

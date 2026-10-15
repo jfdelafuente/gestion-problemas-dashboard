@@ -47,11 +47,14 @@ export async function GET(request: NextRequest) {
     const forceRefresh = searchParams.get('refresh') === 'true' || searchParams.get('refresh') === '1';
 
     const now = Date.now();
+    const resilientCacheControl = 'public, max-age=60, stale-while-revalidate=300, stale-if-error=86400';
+
     if (!forceRefresh && cachedStats && now - cachedStats.timestamp < CACHE_TTL_MS) {
       return NextResponse.json(cachedStats.data, {
         headers: {
-          'Cache-Control': 'public, max-age=60',
+          'Cache-Control': resilientCacheControl,
           'X-Cache': 'HIT',
+          'X-Cached-At': new Date(cachedStats.timestamp).toISOString(),
         },
       });
     }
@@ -67,8 +70,9 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(cachedStats ? cachedStats.data : stats, {
       headers: {
-        'Cache-Control': 'no-store, max-age=0',
+        'Cache-Control': forceRefresh ? 'no-store, max-age=0' : resilientCacheControl,
         'X-Cache': 'MISS',
+        ...(cachedStats ? { 'X-Cached-At': new Date(cachedStats.timestamp).toISOString() } : {}),
       },
     });
   } catch (error) {
@@ -80,13 +84,15 @@ export async function GET(request: NextRequest) {
       console.warn('Returning stale cache due to Jira error');
       return NextResponse.json(cachedStats.data, {
         headers: {
+          'Cache-Control': 'public, max-age=30, stale-while-revalidate=300, stale-if-error=86400',
           'X-Cache': 'STALE',
+          'X-Cached-At': new Date(cachedStats.timestamp).toISOString(),
         },
       });
     }
     return NextResponse.json(
       { error: 'Failed to fetch dashboard statistics' },
-      { status: 500 }
+      { status: 500, headers: { 'Cache-Control': 'no-store' } }
     );
   }
 }

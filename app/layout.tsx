@@ -32,6 +32,9 @@ export default function RootLayout({
       className={`${inter.variable} ${robotoMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
+        <a href="#main-content" className="skip-link">
+          Saltar al contenido principal
+        </a>
         <MoTopbar active="problemas" />
         {children}
       </body>

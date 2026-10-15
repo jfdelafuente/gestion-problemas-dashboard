@@ -56,12 +56,14 @@ export default function DashboardHeader({
           flexWrap: 'wrap',
         }}
       >
-        <div style={{ display: 'flex', gap: 2 }}>
+        <div style={{ display: 'flex', gap: 2 }} role="tablist" aria-label="Vistas del dashboard">
           {TABS.map((t) => {
             const active = activeTab === t.id;
             return (
               <button
                 key={t.id}
+                role="tab"
+                aria-selected={active}
                 onClick={() => onTabChange(t.id)}
                 className={`mo-subbar-tab ${active ? 'active' : ''}`}
               >
@@ -72,12 +74,17 @@ export default function DashboardHeader({
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '8px 0' }}>
-          <div style={{ display: 'inline-flex', background: C.g100, border: `1px solid ${C.g200}`, borderRadius: 8, padding: 3 }}>
+          <div
+            style={{ display: 'inline-flex', background: C.g100, border: `1px solid ${C.g200}`, borderRadius: 8, padding: 3 }}
+            role="group"
+            aria-label="Periodo de análisis"
+          >
             {PERIODS.map((p) => {
               const active = selectedDays === p.days;
               return (
                 <button
                   key={p.days}
+                  aria-pressed={active}
                   onClick={() => onDaysChange(p.days)}
                   className={`mo-subbar-period ${active ? 'active' : ''}`}
                 >
@@ -87,13 +94,13 @@ export default function DashboardHeader({
             })}
           </div>
 
-          <div style={{ width: 1, height: 22, background: C.g200 }} />
+          <div style={{ width: 1, height: 22, background: C.g200 }} aria-hidden="true" />
 
           <div style={{ textAlign: 'right', lineHeight: 1.2 }}>
             <div style={{ fontSize: 9.5, textTransform: 'uppercase', letterSpacing: '.1em', color: C.g400, fontWeight: 600 }}>
               Última actualización
             </div>
-            <div style={{ fontSize: 12, color: C.g700, marginTop: 2, fontWeight: 600 }}>
+            <div className="tabular-nums" style={{ fontSize: 12, color: C.g700, marginTop: 2, fontWeight: 600 }}>
               {lastUpdated ? lastUpdated.toLocaleString('es-ES') : '—'}
             </div>
           </div>
